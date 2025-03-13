@@ -111,7 +111,7 @@ def calibration(cam):
     
     main = {"size": (width, height), "format": "RGB888"}
     controls = {"FrameRate": framerate}
-    sensor = {"bit_depth": 10, "output_size": (640, 480)}
+    sensor = {"bit_depth": 15, "output_size": (2028, 1520)}
     video_config = cam.create_video_configuration(
         main, controls=controls, sensor=sensor
     )
@@ -153,33 +153,33 @@ def calibration(cam):
         display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         
         # Draw the bounding box with markers at corners for resizing
-        cv2.rectangle(display_frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
+        cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
         
         # Draw corner markers
         corner_size = 6
         # Top-left
-        cv2.rectangle(display_frame, (bbox_x - corner_size, bbox_y - corner_size), 
+        cv2.rectangle(frame, (bbox_x - corner_size, bbox_y - corner_size), 
                      (bbox_x + corner_size, bbox_y + corner_size), (255, 0, 0), -1)
         # Top-right
-        cv2.rectangle(display_frame, (bbox_x + bbox_w - corner_size, bbox_y - corner_size), 
+        cv2.rectangle(frame, (bbox_x + bbox_w - corner_size, bbox_y - corner_size), 
                      (bbox_x + bbox_w + corner_size, bbox_y + corner_size), (255, 0, 0), -1)
         # Bottom-left
-        cv2.rectangle(display_frame, (bbox_x - corner_size, bbox_y + bbox_h - corner_size), 
+        cv2.rectangle(frame, (bbox_x - corner_size, bbox_y + bbox_h - corner_size), 
                      (bbox_x + corner_size, bbox_y + bbox_h + corner_size), (255, 0, 0), -1)
         # Bottom-right
-        cv2.rectangle(display_frame, (bbox_x + bbox_w - corner_size, bbox_y + bbox_h - corner_size), 
+        cv2.rectangle(frame, (bbox_x + bbox_w - corner_size, bbox_y + bbox_h - corner_size), 
                      (bbox_x + bbox_w + corner_size, bbox_y + bbox_h + corner_size), (255, 0, 0), -1)
         
         # Display instructions on the frame
-        cv2.putText(display_frame, instructions, (10, height-20), 
+        cv2.putText(frame, instructions, (10, height-20), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
         
         # Display the current bounding box position
         position_text = f"Box: x={bbox_x}, y={bbox_y}, w={bbox_w}, h={bbox_h}"
-        cv2.putText(display_frame, position_text, (10, height-40), 
+        cv2.putText(frame, position_text, (10, height-40), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
         
-        cv2.imshow("Calibration", display_frame)
+        cv2.imshow("Calibration", frame)
         
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
