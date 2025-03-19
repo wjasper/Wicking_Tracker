@@ -108,18 +108,7 @@ def on_mouse(event, x, y, flags, param):
 
 def calibration(cam):
     global bbox_x, bbox_y, bbox_w, bbox_h
-    
-    main = {"size": (width, height), "format": "RGB888"}
-    controls = {"FrameRate": framerate}
-    sensor = {"bit_depth": 15, "output_size": (2028, 1520)}
-    video_config = cam.create_video_configuration(
-        main, controls=controls, sensor=sensor
-    )
-    cam.configure(video_config)
-    
-    # Start the preview
-    cam.start()
-    
+        
     # Create window and set mouse callback
     cv2.namedWindow("Calibration")
     cv2.setMouseCallback("Calibration", on_mouse)
@@ -199,16 +188,51 @@ def calibration(cam):
             break
     
     cv2.destroyAllWindows()
-    # Stop the camera
-    cam.stop()
+
     
-    return (bbox_x, bbox_y, bbox_w, bbox_h)
+    return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
+
+
+
+def sliding_window(cam):
+    
+    global bbox_x, bbox_y, bbox_w, bbox_h
+    
+    cv2.namedWindow("Sliding Window")
+    
+    while True:
+        frame = cam.capture_array()
+        if frame is None:
+            break
+        
+        cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
+        
+        cv2.imshow("Sliding Window", frame)
+        
+        key = cv2.waitKey(40) & 0xFF
+        if key == ord("q"):
+            break
+        
 
 def main():
     # Initialize the PiCamera2
     cam = Picamera2()
-    bbox = calibration(cam)
-    print(f"Final calibration values: x={bbox[0]}, y={bbox[1]}, width={bbox[2]}, height={bbox[3]}")
+    main = {"size": (width, height), "format": "RGB888"}
+    controls = {"FrameRate": framerate}
+    sensor = {"bit_depth": 15, "output_size": (2028, 1520)}
+    video_config = cam.create_video_configuration(
+        main, controls=controls, sensor=sensor
+    )
+    cam.configure(video_config)
+    
+    # Start the preview
+    cam.start()
+    
+    bbox = calibration(cam) #Calibration
+    sliding_window(cam) #Sliding Window
+    
+    # Stop the camera
+    cam.stop()
     
 # Set camera properties
 framerate = 30  # Reduced for better interactivity
@@ -220,3 +244,5 @@ if __name__ == "__main__":
         main()
     else:
         print("OS not compatible")
+
+ #print(f"Final calibration values: x={bbox[0]}, y={bbox[1]}, width={bbox[2]}, height={bbox[3]}")
