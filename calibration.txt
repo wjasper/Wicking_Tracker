@@ -1,4 +1,6 @@
-bbox_x=247
-bbox_y=0
-bbox_w=180
-bbox_h=422
+bbox_x=257
+bbox_y=124
+bbox_w=177
+bbox_h=288
+height_in_inches=13
+inch_per_pixel=0.04513888888888889

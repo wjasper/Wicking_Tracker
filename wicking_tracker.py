@@ -173,20 +173,20 @@ def calibration(cam):
         
         # Display the current bounding box position
         position_text = f"Box: x={bbox_x}, y={bbox_y}, w={bbox_w}, h={bbox_h}"
-        cv2.putText(frame, position_text, (10, height-40), 
+        cv2.putText(frame, position_text, (10, height-  40), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
         
         cv2.imshow("Calibration", frame)
         
-        height_in_inches = input("Enter reading corresponding to the box in inches: ")
-        inch_per_pixel = height_in_inches/bbox_h
         
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
             break
         elif key == ord("s"):
+            height_in_inches = int(input("Enter reading corresponding to the box in inches: "))
+            inch_per_pixel = height_in_inches/bbox_h
             # Save calibration values
-            print(f"Calibration saved: x={bbox_x}, y={bbox_y}, width={bbox_w}, height={bbox_h}")
+            print(f"Calibration saved: x={bbox_x}, y={bbox_y}, width={bbox_w}, height={bbox_h}, , height in inches={height_in_inches}")
             # Write to a file
             with open("calibration.txt", "w") as f:
                 f.write(f"bbox_x={bbox_x}\n")
@@ -194,8 +194,9 @@ def calibration(cam):
                 f.write(f"bbox_w={bbox_w}\n")
                 f.write(f"bbox_h={bbox_h}\n")
                 f.write(f"height_in_inches={height_in_inches}\n")
-                f.write(f"inch_per_pixel={height_in_inches/bbox_h}\n")
+                f.write(f"inch_per_pixel={height_in_inches/bbox_h}\n")  
             print("Calibration values saved to calibration.txt")
+            break
     
     cv2.destroyAllWindows()
     # Stop the camera
