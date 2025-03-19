@@ -23,7 +23,7 @@ drag_start_x = 0
 drag_start_y = 0
 resize_corner = None
 
-def on_mouse(event, x, y):
+def on_mouse(event, x, y, flags, param):
     global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
     
     # Define the sensitivity range for grabbing a corner or edge
@@ -178,6 +178,9 @@ def calibration(cam):
         
         cv2.imshow("Calibration", frame)
         
+        height_in_inches = input("Enter reading corresponding to the box in inches: ")
+        inch_per_pixel = height_in_inches/bbox_h
+        
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
             break
@@ -190,6 +193,8 @@ def calibration(cam):
                 f.write(f"bbox_y={bbox_y}\n")
                 f.write(f"bbox_w={bbox_w}\n")
                 f.write(f"bbox_h={bbox_h}\n")
+                f.write(f"height_in_inches={height_in_inches}\n")
+                f.write(f"inch_per_pixel={height_in_inches/bbox_h}\n")
             print("Calibration values saved to calibration.txt")
     
     cv2.destroyAllWindows()
