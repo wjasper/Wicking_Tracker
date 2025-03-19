@@ -23,7 +23,7 @@ drag_start_x = 0
 drag_start_y = 0
 resize_corner = None
 
-def on_mouse(event, x, y, flags, param):
+def on_mouse(event, x, y):
     global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
     
     # Define the sensitivity range for grabbing a corner or edge
@@ -148,9 +148,6 @@ def calibration(cam):
                 if w > 50 and h > 50:
                     bbox_x, bbox_y, bbox_w, bbox_h = x, y, w, h
                     found_initial_bbox = True
-        
-        # Convert to BGR for display
-        display_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         
         # Draw the bounding box with markers at corners for resizing
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
