@@ -211,6 +211,9 @@ def sliding_window(cam):
     
     cv2.namedWindow("Sliding Window")
     
+    last_time = time.time()
+    
+    first_time = None
     
     while True:
         frame = cam.capture_array()
@@ -223,21 +226,28 @@ def sliding_window(cam):
             base_color = np.mean(cv2.cvtColor(frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
             print("Base Color (Lab):", base_color)
             
-        # Area of interest with updated offset
-        area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 50
-        area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
-
-        sliding_window_color = np.mean(cv2.cvtColor(frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
-        print("Sliding Window Color (Lab):", sliding_window_color)
-
-    
-        delta = calculate_delta(base_color, sliding_window_color)
-        print("Delta:", delta)
+        current_time = time.time()
         
-        # If delta is greater than 15, move the area of interest up
-        if delta > 10:
-            print("Delta greater than 15, moving area of interest window up.")
-            area_of_interest_offset -= 50  # Move the area of interest window up (you can adjust this step size)
+        if current_time - last_time >= 1 or first_time is None:
+            
+            # Area of interest with updated offset
+            area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 2
+            area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
+    
+            sliding_window_color = np.mean(cv2.cvtColor(frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
+            print("Sliding Window Color (Lab):", sliding_window_color)
+    
+        
+            delta = calculate_delta(base_color, sliding_window_color)
+            print("Delta:", delta)
+            
+            # If delta is greater than 15, move the area of interest up
+            if delta > 15:
+                print("Delta greater than 15, moving area of interest window up.")
+                area_of_interest_offset -= 10# Move the area of interest window up (you can adjust this step size)
+            
+            last_time = current_time
+            first_time = True
 
         # Bounding Box
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
@@ -247,6 +257,7 @@ def sliding_window(cam):
         
         
         cv2.imshow("Sliding Window", frame)
+        
         
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
