@@ -23,6 +23,7 @@ drag_start_x = 0
 drag_start_y = 0
 resize_corner = None
 
+
 def on_mouse(event, x, y, flags, param):
     global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
     
@@ -108,6 +109,7 @@ def on_mouse(event, x, y, flags, param):
 
 def calibration(cam):
     global bbox_x, bbox_y, bbox_w, bbox_h
+    
         
     # Create window and set mouse callback
     cv2.namedWindow("Calibration")
@@ -174,6 +176,7 @@ def calibration(cam):
         elif key == ord("s"):
             height_in_inches = int(input("Enter reading corresponding to the box in inches: "))
             inch_per_pixel = height_in_inches/bbox_h
+                        
             # Save calibration values
             print(f"Calibration saved: x={bbox_x}, y={bbox_y}, width={bbox_w}, height={bbox_h}, , height in inches={height_in_inches}")
             # Write to a file
@@ -194,9 +197,15 @@ def calibration(cam):
 
 
 
+def calculate_delta(base_color, sliding_window_color):
+    """ Calculate the Euclidean distance (delta) between two Lab colors """
+    return np.linalg.norm(base_color - sliding_window_color)
+
 def sliding_window(cam):
     
     global bbox_x, bbox_y, bbox_w, bbox_h
+    base_color = None
+    sliding_window_color = None
     
     cv2.namedWindow("Sliding Window")
     
@@ -205,7 +214,26 @@ def sliding_window(cam):
         if frame is None:
             break
         
+        # Compute base_color only once
+        if base_color is None:
+            base_color = np.mean(cv2.cvtColor(frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
+            print("Base Color (Lab):", base_color)
+
+        # Compute sliding_window_color only once
+        if sliding_window_color is None:
+            sliding_window_color = np.mean(cv2.cvtColor(frame[bbox_y + bbox_h - 50:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
+            print("Sliding Window Color (Lab):", sliding_window_color)
+
+        # Calculate the delta (color difference)
+        if base_color is not None and sliding_window_color is not None:
+            delta = calculate_delta(base_color, sliding_window_color)
+            print("Delta:", delta)
+        
+        # Bounding Box
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
+        
+        # Area of interest
+        cv2.rectangle(frame, (bbox_x, bbox_y + bbox_h - 50), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 255, 0), 1)
         
         cv2.imshow("Sliding Window", frame)
         
