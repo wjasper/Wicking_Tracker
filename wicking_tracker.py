@@ -13,6 +13,7 @@ import platform
 import libcamera
 import time
 from picamera2 import Picamera2
+import matplotlib.pyplot as plt
 
 # Global variables for the bounding box
 bbox_x = 150
@@ -23,6 +24,7 @@ dragging = False
 drag_start_x = 0
 drag_start_y = 0
 resize_corner = None
+inch_per_pixel = 0
 
 
 def on_mouse(event, x, y, flags, param):
@@ -109,7 +111,7 @@ def on_mouse(event, x, y, flags, param):
         resize_corner = None
 
 def calibration(cam):
-    global bbox_x, bbox_y, bbox_w, bbox_h
+    global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
     
         
     # Create window and set mouse callback
@@ -196,6 +198,9 @@ def calibration(cam):
     
     return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
 
+def plot_graph():
+    global height_graph
+    pass
 
 
 def calculate_delta(base_color, sliding_window_color):
@@ -204,16 +209,26 @@ def calculate_delta(base_color, sliding_window_color):
 
 def sliding_window(cam):
     
-    global bbox_x, bbox_y, bbox_w, bbox_h
+    global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
     base_color = None
     sliding_window_color = None
     area_of_interest_offset = 0 
+    height_graph = []
     
     cv2.namedWindow("Sliding Window")
     
     last_time = time.time()
     
+    last_graph_time = time.time()
+    
     first_time = None
+    
+    # Setup the plot
+    plt.ion()  # Turn on interactive mode
+    fig, ax = plt.subplots()
+    ax.set_xlabel('Time (seconds)')
+    ax.set_ylabel('Height (inches)')
+    ax.set_title('Area of Interest Height Over Time')
     
     while True:
         frame = cam.capture_array()
@@ -249,6 +264,20 @@ def sliding_window(cam):
             last_time = current_time
             first_time = True
 
+        if current_time - last_graph_time >= 15:
+            height_graph.append(inch_per_pixel*area_of_interest_y1)
+            last_graph_time = current_time
+            
+            # Update the graph
+            ax.clear()
+            ax.plot(height_graph, label='Height of Area of Interest')
+            ax.set_xlabel('Time (seconds)')
+            ax.set_ylabel('Height (inches)')
+            ax.set_title('Area of Interest Height Over Time')
+            ax.legend()
+            plt.draw()
+            plt.pause(0.1)  # Pause to allow plot update
+            
         # Bounding Box
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
         
@@ -262,7 +291,9 @@ def sliding_window(cam):
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
             break
-        
+    
+    plt.ioff()  # Turn off interactive mode at the end
+    plt.show() 
 
 def main():
     # Initialize the PiCamera2
