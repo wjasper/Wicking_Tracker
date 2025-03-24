@@ -11,6 +11,7 @@ import sys
 import time
 import platform
 import libcamera
+import time
 from picamera2 import Picamera2
 
 # Global variables for the bounding box
@@ -206,34 +207,44 @@ def sliding_window(cam):
     global bbox_x, bbox_y, bbox_w, bbox_h
     base_color = None
     sliding_window_color = None
+    area_of_interest_offset = 0 
     
     cv2.namedWindow("Sliding Window")
+    
     
     while True:
         frame = cam.capture_array()
         if frame is None:
             break
         
+        
         # Compute base_color only once
         if base_color is None:
             base_color = np.mean(cv2.cvtColor(frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
             print("Base Color (Lab):", base_color)
+            
+        # Area of interest with updated offset
+        area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 50
+        area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
 
-        # Compute sliding_window_color only once
-        if sliding_window_color is None:
-            sliding_window_color = np.mean(cv2.cvtColor(frame[bbox_y + bbox_h - 50:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
-            print("Sliding Window Color (Lab):", sliding_window_color)
+        sliding_window_color = np.mean(cv2.cvtColor(frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
+        print("Sliding Window Color (Lab):", sliding_window_color)
 
-        # Calculate the delta (color difference)
-        if base_color is not None and sliding_window_color is not None:
-            delta = calculate_delta(base_color, sliding_window_color)
-            print("Delta:", delta)
+    
+        delta = calculate_delta(base_color, sliding_window_color)
+        print("Delta:", delta)
         
+        # If delta is greater than 15, move the area of interest up
+        if delta > 10:
+            print("Delta greater than 15, moving area of interest window up.")
+            area_of_interest_offset -= 50  # Move the area of interest window up (you can adjust this step size)
+
         # Bounding Box
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
         
         # Area of interest
-        cv2.rectangle(frame, (bbox_x, bbox_y + bbox_h - 50), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 255, 0), 1)
+        cv2.rectangle(frame, (bbox_x, area_of_interest_y1), (bbox_x + bbox_w, area_of_interest_y2), (0, 255, 0), 1)
+        
         
         cv2.imshow("Sliding Window", frame)
         
