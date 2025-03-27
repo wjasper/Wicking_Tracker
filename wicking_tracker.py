@@ -198,11 +198,6 @@ def calibration(cam):
     
     return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
 
-def plot_graph():
-    global height_graph
-    pass
-
-
 def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
@@ -235,7 +230,6 @@ def sliding_window(cam):
         if frame is None:
             break
         
-        
         # Compute base_color only once
         if base_color is None:
             base_color = np.mean(cv2.cvtColor(frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
@@ -249,23 +243,25 @@ def sliding_window(cam):
             area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 2
             area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
     
-            sliding_window_color = np.mean(cv2.cvtColor(frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
+            sliding_window_color = np.mean(cv2.cvtColor(
+                frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
             print("Sliding Window Color (Lab):", sliding_window_color)
-    
-        
-            delta = calculate_delta(base_color, sliding_window_color)
-            print("Delta:", delta)
             
-            # If delta is greater than 15, move the area of interest up
-            if delta > 15:
-                print("Delta greater than 15, moving area of interest window up.")
-                area_of_interest_offset -= 10# Move the area of interest window up (you can adjust this step size)
+            delta = calculate_delta(base_color, sliding_window_color)
+            height = inch_per_pixel*(bbox_y + bbox_h - area_of_interest_y1)
+            print("Delta:", delta, "Height:", height)
+            
+            # If delta is greater than 7, move the area of interest up
+            if delta > 7 and height < 17:
+                print("Delta greater than 7, moving area of interest window up.")
+                area_of_interest_offset -= 10 # Move the area of interest window up (you can adjust this step size)
             
             last_time = current_time
-            first_time = True
+            
 
-        if current_time - last_graph_time >= 15:
-            height_graph.append(inch_per_pixel*area_of_interest_y1)
+        if current_time - last_graph_time >= 15 or first_time is None:
+            first_time = True
+            height_graph.append(inch_per_pixel*(area_of_interest_y1 - bbox_y))
             last_graph_time = current_time
             
             # Update the graph
