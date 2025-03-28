@@ -25,6 +25,7 @@ drag_start_x = 0
 drag_start_y = 0
 resize_corner = None
 inch_per_pixel = 0
+height_in_inches = 17
 
 
 def on_mouse(event, x, y, flags, param):
@@ -112,7 +113,7 @@ def on_mouse(event, x, y, flags, param):
 
 def calibration(cam):
     global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
-    
+    global height_in_inches
         
     # Create window and set mouse callback
     cv2.namedWindow("Calibration")
@@ -194,7 +195,6 @@ def calibration(cam):
             break
     
     cv2.destroyAllWindows()
-
     
     return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
 
@@ -205,6 +205,8 @@ def calculate_delta(base_color, sliding_window_color):
 def sliding_window(cam):
     
     global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
+    global height_in_inches
+    
     base_color = None
     sliding_window_color = None
     area_of_interest_offset = 0 
@@ -225,54 +227,52 @@ def sliding_window(cam):
     ax.set_ylabel('Height (inches)')
     ax.set_title('Area of Interest Height Over Time')
     
-    while True:
+    base_colors = []
+
+    print("Calibrating wicking, ...")
+    for _ in range(500):  # Loop to capture the color 500 times
         frame = cam.capture_array()
         if frame is None:
             break
         
-        # Compute base_color only once
-        if base_color is None:
-            base_color = np.mean(cv2.cvtColor(frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
-            print("Base Color (Lab):", base_color)
-            
-        current_time = time.time()
-        
-        if current_time - last_time >= 1 or first_time is None:
-            
-            # Area of interest with updated offset
-            area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 2
-            area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
+        # Compute base_color for each iteration
+        base_color = np.mean(cv2.cvtColor(
+            frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
+        base_colors.append(base_color)
     
+    # Now calculate the average of all collected base colors
+    average_base_color = np.mean(base_colors, axis=0)  # Average across the 100 frames
+    print("Average Base Color (Lab):", average_base_color)
+        
+    while True:
+        
+        sliding_window_colors = []
+        
+        area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 2
+        area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
+        
+        for _ in range(10):
+            frame = cam.capture_array()
+            if frame is None:
+                break
+            
             sliding_window_color = np.mean(cv2.cvtColor(
                 frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
-            print("Sliding Window Color (Lab):", sliding_window_color)
-            
-            delta = calculate_delta(base_color, sliding_window_color)
-            height = inch_per_pixel*(bbox_y + bbox_h - area_of_interest_y1)
-            print("Delta:", delta, "Height:", height)
-            
-            # If delta is greater than 7, move the area of interest up
-            if delta > 7 and height < 17:
-                print("Delta greater than 7, moving area of interest window up.")
-                area_of_interest_offset -= 10 # Move the area of interest window up (you can adjust this step size)
-            
-            last_time = current_time
-            
-
-        if current_time - last_graph_time >= 15 or first_time is None:
-            first_time = True
-            height_graph.append(inch_per_pixel*(area_of_interest_y1 - bbox_y))
-            last_graph_time = current_time
-            
-            # Update the graph
-            ax.clear()
-            ax.plot(height_graph, label='Height of Area of Interest')
-            ax.set_xlabel('Time (seconds)')
-            ax.set_ylabel('Height (inches)')
-            ax.set_title('Area of Interest Height Over Time')
-            ax.legend()
-            plt.draw()
-            plt.pause(0.1)  # Pause to allow plot update
+            sliding_window_colors.append(sliding_window_color)
+        
+        
+        average_sliding_color = np.mean(sliding_window_colors, axis=0)
+        
+        delta = calculate_delta(average_base_color, average_sliding_color)
+        height = inch_per_pixel*(bbox_y + bbox_h - area_of_interest_y1)
+        print("Delta:", delta, "Height:", height)
+        
+        # If delta is greater than 50, move the area of interest up
+        if delta > 50 and height < height_in_inches:
+            print("Delta greater than 50, moving area of interest window up.")
+            area_of_interest_offset -= 2 # Move the area of interest window up (you can adjust this step size)
+        elif height >= height_in_inches:
+            area_of_interest_offset = 0  # Reset to bottom for testing
             
         # Bounding Box
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
@@ -280,9 +280,7 @@ def sliding_window(cam):
         # Area of interest
         cv2.rectangle(frame, (bbox_x, area_of_interest_y1), (bbox_x + bbox_w, area_of_interest_y2), (0, 255, 0), 1)
         
-        
         cv2.imshow("Sliding Window", frame)
-        
         
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
@@ -323,3 +321,26 @@ if __name__ == "__main__":
         print("OS not compatible")
 
  #print(f"Final calibration values: x={bbox[0]}, y={bbox[1]}, width={bbox[2]}, height={bbox[3]}")
+"""
+
+#gRAPH CODE
+
+ 
+        current_time = time.time()
+        
+
+        if current_time - last_graph_time >= 15 or first_time is None:
+            first_time = True
+            height_graph.append(inch_per_pixel*(area_of_interest_y1 - bbox_y))
+            last_graph_time = current_time
+            
+            # Update the graph
+            ax.clear()
+            ax.plot(height_graph, label='Height of Area of Interest')
+            ax.set_xlabel('Time (seconds)')
+            ax.set_ylabel('Height (inches)')
+            ax.set_title('Area of Interest Height Over Time')
+            ax.legend()
+            plt.draw()
+            plt.pause(0.1)  # Pause to allow plot update
+"""
