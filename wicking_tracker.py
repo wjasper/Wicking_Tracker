@@ -218,15 +218,15 @@ def sliding_window(cam):
 
     # initialize start time
     start_time = datetime.datetime.now()
-    delta_time = 0               # elapsed time for sampling
-    plot_time = start_time + 15  # plot time every 15 seconds
+    delta_time = 0                                     # elapsed time for sampling
+    plot_time = start_time + datetime.timedelta(0,15)  # plot time every 15 seconds
 
     # Initialize an empty list for the data
     data_list = []
     
     # Append data to the list and create a Pandas DataFrame from it
     data_list.append([delta_time, height])  # initialize the data
-    df = pd.DataFrame(data_list, columns = ['Time', 'Height [inches]')
+    df = pd.DataFrame(data_list, columns = ['Time', 'Height [inches]'])
 
     # turns on interactive mode
     plt.ion()
@@ -298,12 +298,12 @@ def sliding_window(cam):
                       
         if now > plot_time:
 
-            plot_time += 15
+            plot_time = plot_time + datetime.timedelta(0,15)  # increment plot_time by 15 seconds
             delta_time = (now - start_time).total_seconds()
 
             # Append data to the list and create a Pandas DataFrame from it
             data_list.append([delta_time, height])
-            df = pd.DataFrame(data_list, columns = ['Time', 'Height [inches]')
+            df = pd.DataFrame(data_list, columns = ['Time', 'Height'])
 
             # Clears old plot
             plt.clf()
