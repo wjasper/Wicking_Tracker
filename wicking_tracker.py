@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from picamera2 import Picamera2
 
 # Global variables for the bounding box
@@ -226,19 +227,23 @@ def sliding_window(cam):
     
     # Append data to the list and create a Pandas DataFrame from it
     data_list.append([delta_time, height])  # initialize the data
-    df = pd.DataFrame(data_list, columns = ['Time', 'Height [inches]'])
+    df = pd.DataFrame(data_list, columns = ['Time', 'Height'])
 
-    # turns on interactive mode
-    plt.ion()
-  
     # Setup the plot
     plt.ion()  # Turn on interactive mode
+    
+    # Create a seaborn plot
+    sns.lineplot(data = df, x = "Time", y = "Height")
+    
+    # Redraws plot
+    plt.draw()
+    plt.pause(0.1)  # Pause to allow plot update
     
     base_colors = []
 
     running = True
 
-    print("Calibrating wicking, ...")
+    print("Calibrating wicking, this may take a while ...")
     for _ in range(500):  # Loop to capture the color 500 times
         frame = cam.capture_array()
         if frame is None:
@@ -292,7 +297,7 @@ def sliding_window(cam):
         
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
-            break
+            running = False
 
         now = datetime.datetime.now()
                       
@@ -310,11 +315,17 @@ def sliding_window(cam):
     
             # Create a seaborn plot
             sns.lineplot(data = df, x = "Time", y = "Height")
-    
+            
+            plt.ylabel("Height (inches)")
+            plt.xlabel("Time (seconds)")
+            
             # Redraws plot
             plt.draw()
             plt.pause(0.1)  # Pause to allow plot update
-    
+            
+    ans = input("Press 'y' to save data?: ")
+    if ans.lower == 'y':
+        print("saving data")
     plt.ioff()  # Turn off interactive mode at the end
     plt.show() 
 
@@ -348,28 +359,3 @@ if __name__ == "__main__":
         main()
     else:
         print("OS not compatible")
-
- #print(f"Final calibration values: x={bbox[0]}, y={bbox[1]}, width={bbox[2]}, height={bbox[3]}")
-"""
-
-#gRAPH CODE
-
- 
-        current_time = time.time()
-        
-
-        if current_time - last_graph_time >= 15 or first_time is None:
-            first_time = True
-            height_graph.append(inch_per_pixel*(area_of_interest_y1 - bbox_y))
-            last_graph_time = current_time
-            
-            # Update the graph
-            ax.clear()
-            ax.plot(height_graph, label='Height of Area of Interest')
-            ax.set_xlabel('Time (seconds)')
-            ax.set_ylabel('Height (inches)')
-            ax.set_title('Area of Interest Height Over Time')
-            ax.legend()
-            plt.draw()
-            plt.pause(0.1)  # Pause to allow plot update
-"""
