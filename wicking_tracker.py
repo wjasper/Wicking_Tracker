@@ -5,15 +5,18 @@ Created on Thu Mar 13 14:20:15 2025
 @author: Dr. Warren Jasper and Shivam Ghodke
 """
 # IMPORTS
-import numpy as np
 import cv2
 import sys
+import datetime
 import time
 import platform
 import libcamera
 import time
-from picamera2 import Picamera2
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
+from picamera2 import Picamera2
 
 # Global variables for the bounding box
 bbox_x = 150
@@ -26,7 +29,6 @@ drag_start_y = 0
 resize_corner = None
 inch_per_pixel = 0
 height_in_inches = 17
-
 
 def on_mouse(event, x, y, flags, param):
     global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
@@ -209,25 +211,32 @@ def sliding_window(cam):
     
     base_color = None
     sliding_window_color = None
-    area_of_interest_offset = 0 
-    height_graph = []
+    area_of_interest_offset = 0
+    height = 0
     
     cv2.namedWindow("Sliding Window")
+
+    # initialize start time
+    start_time = datetime.datetime.now()
+    delta_time = 0               # elapsed time for sampling
+    plot_time = start_time + 15  # plot time every 15 seconds
+
+    # Initialize an empty list for the data
+    data_list = []
     
-    last_time = time.time()
-    
-    last_graph_time = time.time()
-    
-    first_time = None
-    
+    # Append data to the list and create a Pandas DataFrame from it
+    data_list.append([delta_time, height])  # initialize the data
+    df = pd.DataFrame(data_list, columns = ['Time', 'Height [inches]')
+
+    # turns on interactive mode
+    plt.ion()
+  
     # Setup the plot
     plt.ion()  # Turn on interactive mode
-    fig, ax = plt.subplots()
-    ax.set_xlabel('Time (seconds)')
-    ax.set_ylabel('Height (inches)')
-    ax.set_title('Area of Interest Height Over Time')
     
     base_colors = []
+
+    running = True
 
     print("Calibrating wicking, ...")
     for _ in range(500):  # Loop to capture the color 500 times
@@ -244,7 +253,7 @@ def sliding_window(cam):
     average_base_color = np.mean(base_colors, axis=0)  # Average across the 100 frames
     print("Average Base Color (Lab):", average_base_color)
         
-    while True:
+    while running:
         
         sliding_window_colors = []
         
@@ -259,7 +268,6 @@ def sliding_window(cam):
             sliding_window_color = np.mean(cv2.cvtColor(
                 frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
             sliding_window_colors.append(sliding_window_color)
-        
         
         average_sliding_color = np.mean(sliding_window_colors, axis=0)
         
@@ -285,6 +293,27 @@ def sliding_window(cam):
         key = cv2.waitKey(40) & 0xFF
         if key == ord("q"):
             break
+
+        now = datetime.datetime.now()
+                      
+        if now > plot_time:
+
+            plot_time += 15
+            delta_time = (now - start_time).total_seconds()
+
+            # Append data to the list and create a Pandas DataFrame from it
+            data_list.append([delta_time, height])
+            df = pd.DataFrame(data_list, columns = ['Time', 'Height [inches]')
+
+            # Clears old plot
+            plt.clf()
+    
+            # Create a seaborn plot
+            sns.lineplot(data = df, x = "Time", y = "Height")
+    
+            # Redraws plot
+            plt.draw()
+            plt.pause(0.1)  # Pause to allow plot update
     
     plt.ioff()  # Turn off interactive mode at the end
     plt.show() 
