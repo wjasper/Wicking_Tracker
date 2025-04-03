@@ -18,6 +18,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from picamera2 import Picamera2
+import os
+
 
 # Global variables for the bounding box
 bbox_x = 150
@@ -30,6 +32,7 @@ drag_start_y = 0
 resize_corner = None
 inch_per_pixel = 0
 height_in_inches = 17
+df = None
 
 def on_mouse(event, x, y, flags, param):
     global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
@@ -177,27 +180,44 @@ def calibration(cam):
         cv2.imshow("Calibration", frame)
         
         
-        key = cv2.waitKey(40) & 0xFF
+        key = cv2.waitKeyEx(40)
+
+
+        #52, 50, 54
+        
+        # Up arrow
+        if key == 56:
+            if bbox_y > 0:
+                bbox_y -= 2
+                bbox_h += 2
+                
+
+        # Down arrow 
+        elif key == 50:
+            if bbox_h > 50:  
+                bbox_y += 2
+                bbox_h -= 2
+
+        # Left arrow 
+        elif key == 52:
+            if bbox_x > 0:
+                bbox_x -= 2
+                bbox_w += 2
+
+        # Right arrow 
+        elif key == 54:
+            if bbox_w > 50: 
+                bbox_x += 2
+                bbox_w -= 2
+
+                
         if key == ord("q"):
-            break
-        elif key == ord("s"):
-            height_in_inches = int(input("Enter reading corresponding to the box in inches: "))
-            inch_per_pixel = height_in_inches/bbox_h
-                        
-            # Save calibration values
-            print(f"Calibration saved: x={bbox_x}, y={bbox_y}, width={bbox_w}, height={bbox_h}, , height in inches={height_in_inches}")
-            # Write to a file
-            with open("calibration.txt", "w") as f:
-                f.write(f"bbox_x={bbox_x}\n")
-                f.write(f"bbox_y={bbox_y}\n")
-                f.write(f"bbox_w={bbox_w}\n")
-                f.write(f"bbox_h={bbox_h}\n")
-                f.write(f"height_in_inches={height_in_inches}\n")
-                f.write(f"inch_per_pixel={height_in_inches/bbox_h}\n")  
-            print("Calibration values saved to calibration.txt")
             break
     
     cv2.destroyAllWindows()
+    
+    height_in_inches = int(input("Enter reading corresponding to the box in inches: "))
+    inch_per_pixel = height_in_inches/bbox_h
     
     return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
 
@@ -209,6 +229,7 @@ def sliding_window(cam):
     
     global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
     global height_in_inches
+    global df
     
     base_color = None
     sliding_window_color = None
@@ -258,7 +279,7 @@ def sliding_window(cam):
     average_base_color = np.mean(base_colors, axis=0)  # Average across the 100 frames
     print("Average Base Color (Lab):", average_base_color)
         
-    while running:
+    while True:
         
         sliding_window_colors = []
         
@@ -295,10 +316,7 @@ def sliding_window(cam):
         
         cv2.imshow("Sliding Window", frame)
         
-        key = cv2.waitKey(40) & 0xFF
-        if key == ord("q"):
-            running = False
-
+        
         now = datetime.datetime.now()
                       
         if now > plot_time:
@@ -322,12 +340,38 @@ def sliding_window(cam):
             # Redraws plot
             plt.draw()
             plt.pause(0.1)  # Pause to allow plot update
+        
+        key = cv2.waitKeyEx(40)
+        if key == ord("q"):
+            break
+
             
-    ans = input("Press 'y' to save data?: ")
-    if ans.lower == 'y':
-        print("saving data")
-    plt.ioff()  # Turn off interactive mode at the end
-    plt.show() 
+    cv2.destroyAllWindows()
+    plt.ioff() 
+    plt.close()
+
+
+def save_data():
+    global df
+    print("saving data")
+    operator_name = input("Enter Operator Name")
+    experiment_name = input("Enter Operator Name")
+
+    
+    # Generate folder name with UTC timestamp
+    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{experiment_name}_{timestamp}"
+    output_path = os.path.join("output", folder_name)
+ 
+    # Create the directory
+    os.makedirs(output_path, exist_ok=True)
+ 
+    # Save CSV
+    csv_path = os.path.join(output_path, "data.csv")
+    df.to_csv(csv_path, index=False)
+ 
+    print(f"Data saved to: {csv_path}")
+    
 
 def main():
     # Initialize the PiCamera2
@@ -340,14 +384,14 @@ def main():
     )
     cam.configure(video_config)
     
-    # Start the preview
     cam.start()
-    
-    bbox = calibration(cam) #Calibration
-    sliding_window(cam) #Sliding Window
-    
-    # Stop the camera
+    calibration(cam)
+    sliding_window(cam)
     cam.stop()
+    
+    ans = input("Press 'y' to save data?: ")
+    if ans.lower == 'y':
+        save_data()
     
 # Set camera properties
 framerate = 30  # Reduced for better interactivity
