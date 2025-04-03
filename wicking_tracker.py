@@ -19,6 +19,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from picamera2 import Picamera2
 import os
+import io
+from PIL import Image
+import json
 
 
 # Global variables for the bounding box
@@ -33,6 +36,7 @@ resize_corner = None
 inch_per_pixel = 0
 height_in_inches = 17
 df = None
+plot_image = None
 
 def on_mouse(event, x, y, flags, param):
     global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
@@ -229,7 +233,7 @@ def sliding_window(cam):
     
     global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
     global height_in_inches
-    global df
+    global df, plot_image
     
     base_color = None
     sliding_window_color = None
@@ -340,35 +344,58 @@ def sliding_window(cam):
             # Redraws plot
             plt.draw()
             plt.pause(0.1)  # Pause to allow plot update
-        
+            
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            plot_image = Image.open(buf)
+                    
         key = cv2.waitKeyEx(40)
         if key == ord("q"):
             break
 
             
     cv2.destroyAllWindows()
+
     plt.ioff() 
     plt.close()
 
 
 def save_data():
-    global df
-    print("saving data")
-    operator_name = input("Enter Operator Name")
-    experiment_name = input("Enter Operator Name")
+    global df, plot_image
 
-    
+    experiment_name = input("Enter Experiment Name: ")
+
     # Generate folder name with UTC timestamp
     timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     folder_name = f"{experiment_name}_{timestamp}"
     output_path = os.path.join("output", folder_name)
  
-    # Create the directory
     os.makedirs(output_path, exist_ok=True)
  
     # Save CSV
     csv_path = os.path.join(output_path, "data.csv")
     df.to_csv(csv_path, index=False)
+    
+    # Save Image
+    image_path = os.path.join(output_path, "plot.png")
+    plot_image.save(image_path)
+ 
+    operator_name = input("Enter Operator Name: ")
+    comment = input("Enter Comments: ")
+    
+    metadata = {
+        "experiment_name": experiment_name,
+        "timestamp": timestamp,
+        "operator": operator_name,
+        "comment": comment
+    }
+
+    # Save metadata as JSON
+    json_path = os.path.join(output_path, "metadata.json")
+    with open(json_path, 'w') as f:
+        json.dump(metadata, f, indent=4)
+
  
     print(f"Data saved to: {csv_path}")
     
@@ -388,10 +415,8 @@ def main():
     calibration(cam)
     sliding_window(cam)
     cam.stop()
-    
-    ans = input("Press 'y' to save data?: ")
-    if ans.lower == 'y':
-        save_data()
+    save_data()
+
     
 # Set camera properties
 framerate = 30  # Reduced for better interactivity
