@@ -23,7 +23,6 @@ import io
 from PIL import Image
 import json
 
-
 # Global variables for the bounding box
 bbox_x = 150
 bbox_y = 100
@@ -130,7 +129,7 @@ def calibration(cam):
     cv2.setMouseCallback("Calibration", on_mouse)
     
     # Instructions to display on screen
-    instructions = "Drag corners to resize, drag center to move. Press 'q' to quit, 's' to save."
+    instructions = "Drag corners to resize, drag center to move. Press 'q' to quit."
     
     # Try to find initial bounding box
     found_initial_bbox = False
@@ -183,9 +182,7 @@ def calibration(cam):
         
         cv2.imshow("Calibration", frame)
         
-        
         key = cv2.waitKeyEx(40)
-
 
         #52, 50, 54
         
@@ -194,7 +191,6 @@ def calibration(cam):
             if bbox_y > 0:
                 bbox_y -= 2
                 bbox_h += 2
-                
 
         # Down arrow 
         elif key == 50:
@@ -213,7 +209,6 @@ def calibration(cam):
             if bbox_w > 50: 
                 bbox_x += 2
                 bbox_w -= 2
-
                 
         if key == ord("q"):
             break
