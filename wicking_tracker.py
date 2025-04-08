@@ -32,8 +32,8 @@ dragging = False
 drag_start_x = 0
 drag_start_y = 0
 resize_corner = None
-inch_per_pixel = 0
-height_in_inches = 17
+cm_per_pixel = 0
+height_in_cm = 17
 df = None
 plot_image = None
 
@@ -121,8 +121,8 @@ def on_mouse(event, x, y, flags, param):
         resize_corner = None
 
 def calibration(cam):
-    global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
-    global height_in_inches
+    global bbox_x, bbox_y, bbox_w, bbox_h, cm_per_pixel
+    global height_in_cm
         
     # Create window and set mouse callback
     cv2.namedWindow("Calibration")
@@ -215,10 +215,10 @@ def calibration(cam):
     
     cv2.destroyAllWindows()
     
-    height_in_inches = int(input("Enter reading corresponding to the box in inches: "))
-    inch_per_pixel = height_in_inches/bbox_h
+    height_in_cm = int(input("Enter reading corresponding to the box in cm: "))
+    cm_per_pixel = height_in_cm/bbox_h
     
-    return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
+    return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pixel)
 
 def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
@@ -226,8 +226,8 @@ def calculate_delta(base_color, sliding_window_color):
 
 def sliding_window(cam):
     
-    global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
-    global height_in_inches
+    global bbox_x, bbox_y, bbox_w, bbox_h, cm_per_pixel
+    global height_in_cm
     global df, plot_image
     
     base_color = None
@@ -297,14 +297,14 @@ def sliding_window(cam):
         average_sliding_color = np.mean(sliding_window_colors, axis=0)
         
         delta = calculate_delta(average_base_color, average_sliding_color)
-        height = inch_per_pixel*(bbox_y + bbox_h - area_of_interest_y1)
+        height = cm_per_pixel*(bbox_y + bbox_h - area_of_interest_y1)
         print("Delta:", delta, "Height:", height)
         
         # If delta is greater than 50, move the area of interest up
-        if delta > 50 and height < height_in_inches:
+        if delta > 19 and height < height_in_cm:
             print("Delta greater than 50, moving area of interest window up.")
             area_of_interest_offset -= 2 # Move the area of interest window up (you can adjust this step size)
-        elif height >= height_in_inches:
+        elif height >= height_in_cm:
             area_of_interest_offset = 0  # Reset to bottom for testing
             
         # Bounding Box
@@ -314,7 +314,6 @@ def sliding_window(cam):
         cv2.rectangle(frame, (bbox_x, area_of_interest_y1), (bbox_x + bbox_w, area_of_interest_y2), (0, 255, 0), 1)
         
         cv2.imshow("Sliding Window", frame)
-        
         
         now = datetime.datetime.now()
                       
@@ -333,7 +332,7 @@ def sliding_window(cam):
             # Create a seaborn plot
             sns.lineplot(data = df, x = "Time", y = "Height")
             
-            plt.ylabel("Height (inches)")
+            plt.ylabel("Height (cm)")
             plt.xlabel("Time (seconds)")
             
             # Redraws plot
@@ -348,13 +347,11 @@ def sliding_window(cam):
         key = cv2.waitKeyEx(40)
         if key == ord("q"):
             break
-
-            
+        
     cv2.destroyAllWindows()
 
     plt.ioff() 
     plt.close()
-
 
 def save_data():
     global df, plot_image
@@ -390,7 +387,6 @@ def save_data():
     json_path = os.path.join(output_path, "metadata.json")
     with open(json_path, 'w') as f:
         json.dump(metadata, f, indent=4)
-
  
     print(f"Data saved to: {csv_path}")
     
