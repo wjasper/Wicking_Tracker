@@ -7,7 +7,9 @@ Created on Thu Mar 13 14:20:15 2025
 
 import platform
 from picamera2 import Picamera2
-from processing_modules import calibration
+from processing_modules.calibration import calibration
+from processing_modules.sliding_window import sliding_window
+from processing_modules.save_data import save_data
 
 def main():
     # Initialize the PiCamera2
@@ -21,10 +23,10 @@ def main():
     cam.configure(video_config)
     
     cam.start()
-    calibration(cam)
-    sliding_window(cam)
+    bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel = calibration(cam)
+    df, plot_image = sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
     cam.stop()
-    save_data()
+    save_data(df, plot_image)
 
     
 # Set camera properties

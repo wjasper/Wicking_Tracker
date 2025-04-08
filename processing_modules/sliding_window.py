@@ -1,36 +1,11 @@
-
-# IMPORTS
 import cv2
-import sys
 import datetime
-import time
-import platform
-import libcamera
-import time
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-from picamera2 import Picamera2
-import os
 import io
 from PIL import Image
-import json
-
-# Global variables for the bounding box
-bbox_x = 150
-bbox_y = 100
-bbox_w = 300
-bbox_h = 200
-dragging = False
-drag_start_x = 0
-drag_start_y = 0
-resize_corner = None
-inch_per_pixel = 0
-height_in_inches = 17
-df = None
-plot_image = None
 
 
 
@@ -39,11 +14,9 @@ def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
 
-def sliding_window(cam):
+def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel):
     
-    global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
-    global height_in_inches
-    global df, plot_image
+    df, plot_image = None, None
     
     base_color = None
     sliding_window_color = None
@@ -169,3 +142,5 @@ def sliding_window(cam):
 
     plt.ioff() 
     plt.close()
+    
+    return df, plot_image

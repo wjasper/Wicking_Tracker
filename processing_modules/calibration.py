@@ -1,5 +1,18 @@
+import cv2
 
 
+
+# Global variables for the bounding box
+bbox_x = 150
+bbox_y = 100
+bbox_w = 300
+bbox_h = 200
+dragging = False
+drag_start_x = 0
+drag_start_y = 0
+resize_corner = None
+inch_per_pixel = 0
+height_in_inches = 17
 
 def on_mouse(event, x, y, flags, param):
     global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
@@ -87,7 +100,7 @@ def on_mouse(event, x, y, flags, param):
 
 def calibration(cam):
     global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
-    global height_in_inches
+    height_in_inches = None
         
     # Create window and set mouse callback
     cv2.namedWindow("Calibration")

@@ -1,5 +1,9 @@
-def save_data():
-    global df, plot_image
+import os
+import json
+import datetime
+
+
+def save_data(df, plot_image):
 
     experiment_name = input("Enter Experiment Name: ")
 
@@ -36,4 +40,3 @@ def save_data():
  
     print(f"Data saved to: {csv_path}")
     
-
