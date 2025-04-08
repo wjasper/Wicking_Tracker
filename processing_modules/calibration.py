@@ -1,199 +1,148 @@
 import cv2
 
+class BoundingBox:
+    def __init__(self, x=150, y=100, w=300, h=200):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.dragging = False
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+        self.resize_corner = None
+        self.inch_per_pixel = 0
+
+    def handle_mouse(self, event, x, y, flags, param):
+        height = param["height"]
+        width = param["width"]
+        sensitivity = 15
+
+        top_left = (self.x, self.y)
+        top_right = (self.x + self.w, self.y)
+        bottom_left = (self.x, self.y + self.h)
+        bottom_right = (self.x + self.w, self.y + self.h)
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            if abs(x - top_left[0]) < sensitivity and abs(y - top_left[1]) < sensitivity:
+                self.resize_corner = "top_left"
+                self.dragging = True
+            elif abs(x - top_right[0]) < sensitivity and abs(y - top_right[1]) < sensitivity:
+                self.resize_corner = "top_right"
+                self.dragging = True
+            elif abs(x - bottom_left[0]) < sensitivity and abs(y - bottom_left[1]) < sensitivity:
+                self.resize_corner = "bottom_left"
+                self.dragging = True
+            elif abs(x - bottom_right[0]) < sensitivity and abs(y - bottom_right[1]) < sensitivity:
+                self.resize_corner = "bottom_right"
+                self.dragging = True
+            elif self.x < x < self.x + self.w and self.y < y < self.y + self.h:
+                self.resize_corner = "move"
+                self.dragging = True
+                self.drag_start_x = x - self.x
+                self.drag_start_y = y - self.y
+
+        elif event == cv2.EVENT_MOUSEMOVE and self.dragging:
+            x = max(0, min(x, width))
+            y = max(0, min(y, height))
+
+            if self.resize_corner == "top_left":
+                new_w = self.x + self.w - x
+                new_h = self.y + self.h - y
+                if new_w > 50 and new_h > 50:
+                    self.w = new_w
+                    self.h = new_h
+                    self.x = x
+                    self.y = y
+            elif self.resize_corner == "top_right":
+                new_w = x - self.x
+                new_h = self.y + self.h - y
+                if new_w > 50 and new_h > 50:
+                    self.w = new_w
+                    self.y = y
+                    self.h = new_h
+            elif self.resize_corner == "bottom_left":
+                new_w = self.x + self.w - x
+                new_h = y - self.y
+                if new_w > 50 and new_h > 50:
+                    self.w = new_w
+                    self.x = x
+                    self.h = new_h
+            elif self.resize_corner == "bottom_right":
+                new_w = x - self.x
+                new_h = y - self.y
+                if new_w > 50 and new_h > 50:
+                    self.w = new_w
+                    self.h = new_h
+            elif self.resize_corner == "move":
+                new_x = x - self.drag_start_x
+                new_y = y - self.drag_start_y
+                if new_x >= 0 and new_x + self.w <= width:
+                    self.x = new_x
+                if new_y >= 0 and new_y + self.h <= height:
+                    self.y = new_y
+
+        elif event == cv2.EVENT_LBUTTONUP:
+            self.dragging = False
+            self.resize_corner = None
 
 
-# Global variables for the bounding box
-bbox_x = 150
-bbox_y = 100
-bbox_w = 300
-bbox_h = 200
-dragging = False
-drag_start_x = 0
-drag_start_y = 0
-resize_corner = None
-inch_per_pixel = 0
-height_in_inches = 17
-
-def on_mouse(event, x, y, flags, param):
-    global bbox_x, bbox_y, bbox_w, bbox_h, dragging, drag_start_x, drag_start_y, resize_corner
-    
-    # Define the sensitivity range for grabbing a corner or edge
-    sensitivity = 15
-    
-    # Bounding box corners and edges
-    top_left = (bbox_x, bbox_y)
-    top_right = (bbox_x + bbox_w, bbox_y)
-    bottom_left = (bbox_x, bbox_y + bbox_h)
-    bottom_right = (bbox_x + bbox_w, bbox_y + bbox_h)
-    
-    if event == cv2.EVENT_LBUTTONDOWN:
-        # Check if click is near a corner for resizing
-        if abs(x - top_left[0]) < sensitivity and abs(y - top_left[1]) < sensitivity:
-            resize_corner = "top_left"
-            dragging = True
-        elif abs(x - top_right[0]) < sensitivity and abs(y - top_right[1]) < sensitivity:
-            resize_corner = "top_right"
-            dragging = True
-        elif abs(x - bottom_left[0]) < sensitivity and abs(y - bottom_left[1]) < sensitivity:
-            resize_corner = "bottom_left"
-            dragging = True
-        elif abs(x - bottom_right[0]) < sensitivity and abs(y - bottom_right[1]) < sensitivity:
-            resize_corner = "bottom_right"
-            dragging = True
-        # Check if click is inside the box for moving
-        elif bbox_x < x < bbox_x + bbox_w and bbox_y < y < bbox_y + bbox_h:
-            resize_corner = "move"
-            dragging = True
-            drag_start_x = x - bbox_x
-            drag_start_y = y - bbox_y
-    
-    elif event == cv2.EVENT_MOUSEMOVE and dragging:
-        # Constrain to frame boundaries
-        x = max(0, min(x, width))
-        y = max(0, min(y, height))
-        
-        if resize_corner == "top_left":
-            # Calculate new width and height
-            new_w = bbox_x + bbox_w - x
-            new_h = bbox_y + bbox_h - y
-            # Only update if size is reasonable
-            if new_w > 50 and new_h > 50:
-                bbox_w = new_w
-                bbox_h = new_h
-                bbox_x = x
-                bbox_y = y
-        elif resize_corner == "top_right":
-            new_w = x - bbox_x
-            new_h = bbox_y + bbox_h - y
-            if new_w > 50 and new_h > 50:
-                bbox_w = new_w
-                bbox_y = y
-                bbox_h = new_h
-        elif resize_corner == "bottom_left":
-            new_w = bbox_x + bbox_w - x
-            new_h = y - bbox_y
-            if new_w > 50 and new_h > 50:
-                bbox_w = new_w
-                bbox_x = x
-                bbox_h = new_h
-        elif resize_corner == "bottom_right":
-            new_w = x - bbox_x
-            new_h = y - bbox_y
-            if new_w > 50 and new_h > 50:
-                bbox_w = new_w
-                bbox_h = new_h
-        elif resize_corner == "move":
-            # Move the entire box
-            new_x = x - drag_start_x
-            new_y = y - drag_start_y
-            # Constrain to frame boundaries
-            if new_x >= 0 and new_x + bbox_w <= width:
-                bbox_x = new_x
-            if new_y >= 0 and new_y + bbox_h <= height:
-                bbox_y = new_y
-    
-    elif event == cv2.EVENT_LBUTTONUP:
-        # Stop dragging
-        dragging = False
-        resize_corner = None
-        
-
-def calibration(cam):
-    global bbox_x, bbox_y, bbox_w, bbox_h, inch_per_pixel
-    height_in_inches = None
-        
-    # Create window and set mouse callback
+def calibration(cam, height, width):
+    bbox = BoundingBox()
     cv2.namedWindow("Calibration")
-    cv2.setMouseCallback("Calibration", on_mouse)
-    
-    # Instructions to display on screen
+    cv2.setMouseCallback("Calibration", bbox.handle_mouse, {"height": height, "width": width})
     instructions = "Drag corners to resize, drag center to move. Press 'q' to quit."
-    
-    # Try to find initial bounding box
     found_initial_bbox = False
-    
+
     while True:
         frame = cam.capture_array()
         if frame is None:
             break
-        
-        # Try to detect the white cloth automatically if no manual adjustment yet
-        if not found_initial_bbox and not dragging:
+
+        if not found_initial_bbox and not bbox.dragging:
             gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
             _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
+
             if contours:
-                largest_contour = max(contours, key=cv2.contourArea)
-                x, y, w, h = cv2.boundingRect(largest_contour)
-                # Only update if the contour is reasonably sized
+                largest = max(contours, key=cv2.contourArea)
+                x, y, w, h = cv2.boundingRect(largest)
                 if w > 50 and h > 50:
-                    bbox_x, bbox_y, bbox_w, bbox_h = x, y, w, h
+                    bbox.x, bbox.y, bbox.w, bbox.h = x, y, w, h
                     found_initial_bbox = True
-        
-        # Draw the bounding box with markers at corners for resizing
-        cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
-        
+
+        # Draw bounding box
+        cv2.rectangle(frame, (bbox.x, bbox.y), (bbox.x + bbox.w, bbox.y + bbox.h), (0, 0, 255), 2)
+
         # Draw corner markers
-        corner_size = 6
-        # Top-left
-        cv2.rectangle(frame, (bbox_x - corner_size, bbox_y - corner_size), 
-                     (bbox_x + corner_size, bbox_y + corner_size), (255, 0, 0), -1)
-        # Top-right
-        cv2.rectangle(frame, (bbox_x + bbox_w - corner_size, bbox_y - corner_size), 
-                     (bbox_x + bbox_w + corner_size, bbox_y + corner_size), (255, 0, 0), -1)
-        # Bottom-left
-        cv2.rectangle(frame, (bbox_x - corner_size, bbox_y + bbox_h - corner_size), 
-                     (bbox_x + corner_size, bbox_y + bbox_h + corner_size), (255, 0, 0), -1)
-        # Bottom-right
-        cv2.rectangle(frame, (bbox_x + bbox_w - corner_size, bbox_y + bbox_h - corner_size), 
-                     (bbox_x + bbox_w + corner_size, bbox_y + bbox_h + corner_size), (255, 0, 0), -1)
-        
-        # Display instructions on the frame
-        cv2.putText(frame, instructions, (10, height-20), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-        
-        # Display the current bounding box position
-        position_text = f"Box: x={bbox_x}, y={bbox_y}, w={bbox_w}, h={bbox_h}"
-        cv2.putText(frame, position_text, (10, height-  40), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-        
+        cs = 6
+        cv2.rectangle(frame, (bbox.x - cs, bbox.y - cs), (bbox.x + cs, bbox.y + cs), (255, 0, 0), -1)  # top-left
+        cv2.rectangle(frame, (bbox.x + bbox.w - cs, bbox.y - cs), (bbox.x + bbox.w + cs, bbox.y + cs), (255, 0, 0), -1)  # top-right
+        cv2.rectangle(frame, (bbox.x - cs, bbox.y + bbox.h - cs), (bbox.x + cs, bbox.y + bbox.h + cs), (255, 0, 0), -1)  # bottom-left
+        cv2.rectangle(frame, (bbox.x + bbox.w - cs, bbox.y + bbox.h - cs), (bbox.x + bbox.w + cs, bbox.y + bbox.h + cs), (255, 0, 0), -1)  # bottom-right
+
+        cv2.putText(frame, instructions, (10, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, f"Box: x={bbox.x}, y={bbox.y}, w={bbox.w}, h={bbox.h}", (10, height - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
         cv2.imshow("Calibration", frame)
-        
         key = cv2.waitKeyEx(40)
 
-        #52, 50, 54
-        
-        # Up arrow
-        if key == 56:
-            if bbox_y > 0:
-                bbox_y -= 2
-                bbox_h += 2
-
-        # Down arrow 
-        elif key == 50:
-            if bbox_h > 50:  
-                bbox_y += 2
-                bbox_h -= 2
-
-        # Left arrow 
-        elif key == 52:
-            if bbox_x > 0:
-                bbox_x -= 2
-                bbox_w += 2
-
-        # Right arrow 
-        elif key == 54:
-            if bbox_w > 50: 
-                bbox_x += 2
-                bbox_w -= 2
-                
-        if key == ord("q"):
+        if key == 56 and bbox.y > 0:
+            bbox.y -= 2
+            bbox.h += 2
+        elif key == 50 and bbox.h > 50:
+            bbox.y += 2
+            bbox.h -= 2
+        elif key == 52 and bbox.x > 0:
+            bbox.x -= 2
+            bbox.w += 2
+        elif key == 54 and bbox.w > 50:
+            bbox.x += 2
+            bbox.w -= 2
+        elif key == ord("q"):
             break
-    
+
     cv2.destroyAllWindows()
-    
     height_in_inches = int(input("Enter reading corresponding to the box in inches: "))
-    inch_per_pixel = height_in_inches/bbox_h
-    
-    return (bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
+    bbox.inch_per_pixel = height_in_inches / bbox.h
+
+    return (bbox.x, bbox.y, bbox.w, bbox.h, height_in_inches, bbox.inch_per_pixel)

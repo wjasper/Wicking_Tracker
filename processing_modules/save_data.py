@@ -10,7 +10,7 @@ def save_data(df, plot_image):
     # Generate folder name with UTC timestamp
     timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     folder_name = f"{experiment_name}_{timestamp}"
-    output_path = os.path.join("output", folder_name)
+    output_path = os.path.join("..", "output", folder_name)
  
     os.makedirs(output_path, exist_ok=True)
  

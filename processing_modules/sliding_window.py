@@ -8,8 +8,6 @@ import io
 from PIL import Image
 
 
-
-
 def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
@@ -102,7 +100,6 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_p
         cv2.rectangle(frame, (bbox_x, area_of_interest_y1), (bbox_x + bbox_w, area_of_interest_y2), (0, 255, 0), 1)
         
         cv2.imshow("Sliding Window", frame)
-        
         
         now = datetime.datetime.now()
                       
