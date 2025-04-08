@@ -12,7 +12,7 @@ def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
 
-def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel):
+def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pixel, average_base_color):
     
     df, plot_image = None, None
     
@@ -45,24 +45,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_p
     plt.draw()
     plt.pause(0.1)  # Pause to allow plot update
     
-    base_colors = []
-
-    running = True
-
-    print("Calibrating wicking, this may take a while ...")
-    for _ in range(500):  # Loop to capture the color 500 times
-        frame = cam.capture_array()
-        if frame is None:
-            break
-        
-        # Compute base_color for each iteration
-        base_color = np.mean(cv2.cvtColor(
-            frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
-        base_colors.append(base_color)
     
-    # Now calculate the average of all collected base colors
-    average_base_color = np.mean(base_colors, axis=0)  # Average across the 100 frames
-    print("Average Base Color (Lab):", average_base_color)
         
     while True:
         
@@ -83,14 +66,14 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_p
         average_sliding_color = np.mean(sliding_window_colors, axis=0)
         
         delta = calculate_delta(average_base_color, average_sliding_color)
-        height = inch_per_pixel*(bbox_y + bbox_h - area_of_interest_y1)
+        height = cm_per_pixel*(bbox_y + bbox_h - area_of_interest_y1)
         print("Delta:", delta, "Height:", height)
         
         # If delta is greater than 50, move the area of interest up
-        if delta > 50 and height < height_in_inches:
+        if delta > 50 and height < height_in_cm:
             print("Delta greater than 50, moving area of interest window up.")
             area_of_interest_offset -= 2 # Move the area of interest window up (you can adjust this step size)
-        elif height >= height_in_inches:
+        elif height >= height_in_cm:
             area_of_interest_offset = 0  # Reset to bottom for testing
             
         # Bounding Box
@@ -118,7 +101,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_p
             # Create a seaborn plot
             sns.lineplot(data = df, x = "Time", y = "Height")
             
-            plt.ylabel("Height (inches)")
+            plt.ylabel("Height (cm)")
             plt.xlabel("Time (seconds)")
             
             # Redraws plot

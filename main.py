@@ -7,7 +7,7 @@ Created on Thu Mar 13 14:20:15 2025
 
 import platform
 from picamera2 import Picamera2
-from processing_modules.calibration import calibration
+from processing_modules.calibration import calibration, base_color
 from processing_modules.sliding_window import sliding_window
 from processing_modules.save_data import save_data
 
@@ -28,12 +28,23 @@ def main():
     cam.configure(video_config)
     
     cam.start()
-    bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel = calibration(cam, height, width)
-    df, plot_image = sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_inches, inch_per_pixel)
-    cam.stop()
-    save_data(df, plot_image)
+    print("Starting calibration...")
+    bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pixel = calibration(cam, height, width)
+    average_base_color = base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h)
+    print("Calibration complete.")
 
     
+    start_sliding_window_input = str(input("Enter y to start wicking tracker: "))
+    if start_sliding_window_input.upper() == "Y":
+        df, plot_image = sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pixel, average_base_color)
+
+        save_data_input = str(input("Enter y to save data: "))
+        if save_data_input.upper() == "Y":
+            save_data(df, plot_image)
+
+    cam.stop()
+
+    print("Program completed successfully")
 
 if __name__ == "__main__":
     if platform.system() == "Linux":

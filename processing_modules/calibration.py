@@ -1,4 +1,6 @@
 import cv2
+import numpy as np
+
 
 class BoundingBox:
     def __init__(self, x=150, y=100, w=300, h=200):
@@ -10,7 +12,7 @@ class BoundingBox:
         self.drag_start_x = 0
         self.drag_start_y = 0
         self.resize_corner = None
-        self.inch_per_pixel = 0
+        self.cm_per_pixel = 0
 
     def handle_mouse(self, event, x, y, flags, param):
         height = param["height"]
@@ -142,7 +144,29 @@ def calibration(cam, height, width):
             break
 
     cv2.destroyAllWindows()
-    height_in_inches = int(input("Enter reading corresponding to the box in inches: "))
-    bbox.inch_per_pixel = height_in_inches / bbox.h
+    height_in_cm = int(input("Enter reading corresponding to the box in cms: "))
+    bbox.cm_per_pixel = height_in_cm / bbox.h
 
-    return (bbox.x, bbox.y, bbox.w, bbox.h, height_in_inches, bbox.inch_per_pixel)
+    return (bbox.x, bbox.y, bbox.w, bbox.h, height_in_cm, bbox.cm_per_pixel)
+
+
+def base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h):
+    cv2.namedWindow("Getting average over 500 frames")
+    base_colors = []
+
+    print("Calibrating wicking, this may take a while ...")
+    for _ in range(500):  # Loop to capture the color 500 times
+        frame = cam.capture_array()
+        if frame is None:
+            break
+        
+        # Compute base_color for each iteration
+        base_color = np.mean(cv2.cvtColor(
+            frame[bbox_y:bbox_y + bbox_h, bbox_x:bbox_x + bbox_w], cv2.COLOR_BGR2Lab), axis=(0, 1))
+        base_colors.append(base_color)
+    
+    # Now calculate the average of all collected base colors
+    average_base_color = np.mean(base_colors, axis=0)  # Average across the 100 frames
+    print("Average Base Color (Lab):", average_base_color)
+
+    return average_base_color
