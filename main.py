@@ -6,12 +6,14 @@ Created on Thu Mar 13 14:20:15 2025
 """
 
 import platform
-from picamera2 import Picamera2
-from processing_modules.calibration import calibration, base_color
-from processing_modules.sliding_window import sliding_window
-from processing_modules.save_data import save_data
+import sys
 
 def main():
+    from picamera2 import Picamera2
+    from calibration import calibration, base_color
+    from sliding_window import sliding_window
+    from save_data import save_data
+    
     # Set camera properties
     framerate = 30  # Reduced for better interactivity
     width = 640     # Width of video frame
@@ -48,6 +50,7 @@ def main():
 
 if __name__ == "__main__":
     if platform.system() == "Linux":
+        sys.path.append('/home/pi/opencv/Wicking_Tracker/processing_modules')
         main()
     else:
         print("OS not compatible")
