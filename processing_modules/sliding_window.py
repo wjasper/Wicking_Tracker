@@ -6,12 +6,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import io
 from PIL import Image
+from scipy.signal import savgol_filter
 
 def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
 
-def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pixel, average_base_color):
+def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color):
     df, plot_image = None, None
     area_of_interest_offset = 0
     height = 0
@@ -34,6 +35,11 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pix
     ax2 = fig2.gca()
     ax2.clear()
 
+    original_delta_threshold = 40
+    current_delta_threshold = original_delta_threshold
+    last_height_update_time = start_time
+    last_height_value = 0
+
     while True:
         sliding_window_colors = []
         area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 2
@@ -49,11 +55,22 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pix
             sliding_window_colors.append(sliding_window_color)
 
         average_sliding_color = np.mean(sliding_window_colors, axis=0)
-        delta = calculate_delta(average_base_color, average_sliding_color)
-        height = cm_per_pixel * (bbox_y + bbox_h - area_of_interest_y1)
+        delta_E_mean = calculate_delta(average_base_color, average_sliding_color)
+        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y1)
 
         now = datetime.datetime.now()
+
         delta_time = (now - start_time).total_seconds()
+        if abs(height - last_height_value) > 0.1:
+            last_height_update_time = now
+            last_height_value = height
+
+        # [ADDED] Reduce threshold if no height change for 30 seconds
+        if (now - last_height_update_time).total_seconds() > 30:
+            new_threshold = current_delta_threshold * 0.9
+            current_delta_threshold = max(new_threshold, 5)
+            print(f"[INFO] No height change in 30s. Reducing delta threshold to {current_delta_threshold:.2f}")
+            last_height_update_time = now  # reset timer
 
         # Update data
         # data_list.append([delta_time, height])
@@ -74,13 +91,13 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pix
         df.at[df.index[-1], "Wicking Rate"] = rate
 
         # Print live values
-        print(f"Time: {delta_time:.2f} s | Delta E: {delta:.4f} | Height: {height:.4f} cm | Wicking Rate: {rate:.4f} cm/s")
+        print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Wicking Rate: {rate:.4f} mm/s")
 
         # Adjust AOI
-        if delta > 50 and height < height_in_cm:
-            print("Delta greater than 50, moving area of interest window up.")
+        if delta_E_mean > current_delta_threshold and height < height_in_mm:
+            print(f"Delta greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
             area_of_interest_offset -= 2
-        elif height >= height_in_cm:
+        elif height >= height_in_mm:
             area_of_interest_offset = 0
 
         # Draw bounding boxes
@@ -90,21 +107,23 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pix
 
         # Plot every 15 seconds
         if now > plot_time:
-            plot_time += datetime.timedelta(seconds=15)
+            plot_time += datetime.timedelta(seconds=2)
 
             # Plot height
             ax1.clear()
             sns.lineplot(ax=ax1, data=df, x="Time", y="Height")
             ax1.set_title("Height Over Time")
             ax1.set_xlabel("Time (seconds)")
-            ax1.set_ylabel("Height (cm)")
+            ax1.set_ylabel("Height (mm)")
 
             # Plot wicking rate
             ax2.clear()
             # sns.lineplot(ax=ax2, data=df, x="Time", y="Wicking Rate")
             df_plot = df.copy()
-            df_plot["Smoothed Wicking Rate"] = df_plot["Wicking Rate"].rolling(window=10, min_periods=1).mean()
+
+            df_plot["Smoothed Wicking Rate"] = df["Wicking Rate"]
             sns.lineplot(ax=ax2, data=df_plot, x="Time", y="Smoothed Wicking Rate")
+            
             ax2.set_title("Wicking Rate Over Time")
             ax2.set_xlabel("Time (seconds)")
             ax2.set_ylabel("Wicking Rate")
