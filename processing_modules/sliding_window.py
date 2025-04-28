@@ -11,6 +11,24 @@ from scipy.signal import savgol_filter
 def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
+#gauss
+def gaussian_weighted_mean(region):
+    """Apply Gaussian weighting to region and compute weighted mean color."""
+    h, w = region.shape[:2]
+    gauss_y = cv2.getGaussianKernel(h, h // 2)
+    gauss_x = cv2.getGaussianKernel(w, w // 2)
+    gaussian_mask = gauss_y @ gauss_x.T
+    gaussian_mask /= gaussian_mask.sum()
+
+    lab = cv2.cvtColor(region, cv2.COLOR_BGR2Lab)
+
+    # Expand mask to shape (h, w, 1) for broadcasting
+    weighted = lab * gaussian_mask[:, :, np.newaxis]
+    weighted_sum = np.sum(weighted, axis=(0, 1))
+    weighted_mean = weighted_sum  # Already normalized because we normalized mask
+
+    return weighted_mean
+
 
 def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color):
     df, plot_image = None, None
@@ -41,21 +59,30 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     last_height_value = 0
 
     while True:
-        sliding_window_colors = []
-        area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 2
+        simple_means = []
+        gaussian_means = []
+        area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 10
         area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
 
         for _ in range(10):
             frame = cam.capture_array()
             if frame is None:
                 break
-            sliding_window_color = np.mean(cv2.cvtColor(
-                frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w],
-                cv2.COLOR_BGR2Lab), axis=(0, 1))
-            sliding_window_colors.append(sliding_window_color)
 
-        average_sliding_color = np.mean(sliding_window_colors, axis=0)
-        delta_E_mean = calculate_delta(average_base_color, average_sliding_color)
+            region = frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w]
+
+            simple_mean = np.mean(cv2.cvtColor(region, cv2.COLOR_BGR2Lab), axis=(0, 1))
+            weighted_mean = gaussian_weighted_mean(region)
+
+            simple_means.append(simple_mean)
+            gaussian_means.append(weighted_mean)
+
+        average_simple_color = np.mean(simple_means, axis=0)
+        average_gaussian_color = np.mean(gaussian_means, axis=0)
+
+        delta_E_mean = calculate_delta(average_base_color, average_simple_color)
+        delta_gaussian = calculate_delta(average_base_color, average_gaussian_color)
+
         height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y1)
 
         now = datetime.datetime.now()
@@ -78,25 +105,31 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         df.loc[len(df)] = [delta_time, height, 0] 
 
         # Calculate wicking rate using cubic polynomial (sliding 4-point window)
-        if len(df) >= 4:
+        if len(df) >= 6:
+            smooth_heights = savgol_filter(df["Height"], window_length=5, polyorder=2)
+
             t_window = df["Time"].iloc[-4:].values
-            h_window = df["Height"].iloc[-4:].values
+            h_window = smooth_heights[-4:]  # <=== smoothed heights here
+
             coeffs = np.polyfit(t_window, h_window, 3)
             a, b, c, d = coeffs
             t_latest = t_window[-1]
             rate = 3 * a * t_latest**2 + 2 * b * t_latest + c
+
+            # Clip rates
+            rate = np.clip(rate, 0, 5)
         else:
             rate = 0
 
         df.at[df.index[-1], "Wicking Rate"] = rate
 
         # Print live values
-        print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Wicking Rate: {rate:.4f} mm/s")
+        print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Delta Gauss: {delta_gaussian:.4f} | Height: {height:.4f} mm | Wicking Rate: {rate:.4f} mm/s")
 
         # Adjust AOI
         if delta_E_mean > current_delta_threshold and height < height_in_mm:
             print(f"Delta greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
-            area_of_interest_offset -= 2
+            area_of_interest_offset -= 1
         elif height >= height_in_mm:
             area_of_interest_offset = 0
 
@@ -107,7 +140,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
 
         # Plot every 15 seconds
         if now > plot_time:
-            plot_time += datetime.timedelta(seconds=2)
+            plot_time += datetime.timedelta(seconds=10)
 
             # Plot height
             ax1.clear()
