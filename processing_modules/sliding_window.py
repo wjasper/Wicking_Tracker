@@ -35,6 +35,8 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     area_of_interest_offset = 0
     height = 0
     rate = 0
+    previous_rate = 1
+
 
     cv2.namedWindow("Sliding Window")
 
@@ -83,7 +85,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         delta_E_mean = calculate_delta(average_base_color, average_simple_color)
         delta_gaussian = calculate_delta(average_base_color, average_gaussian_color)
 
-        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y1)
+        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) -1
 
         now = datetime.datetime.now()
 
@@ -105,21 +107,32 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         df.loc[len(df)] = [delta_time, height, 0] 
 
         # Calculate wicking rate using cubic polynomial (sliding 4-point window)
-        if len(df) >= 6:
-            smooth_heights = savgol_filter(df["Height"], window_length=5, polyorder=2)
-
+        if len(df) >= 4:
             t_window = df["Time"].iloc[-4:].values
-            h_window = smooth_heights[-4:]  # <=== smoothed heights here
-
+            h_window = df["Height"].iloc[-4:].values
             coeffs = np.polyfit(t_window, h_window, 3)
-            a, b, c, d = coeffs
-            t_latest = t_window[-1]
-            rate = 3 * a * t_latest**2 + 2 * b * t_latest + c
+            a,b,c,d = coeffs
 
-            # Clip rates
-            rate = np.clip(rate, 0, 5)
-        else:
-            rate = 0
+            t_latest = t_window[-1]
+            raw_rate = 3 * a * t_latest**2 + 2 * b * t_latest + c
+
+            # Limit rate change to ±5% from previous_rate
+            max_change = 0.05  # allow only ±5% change
+            raw_rate = abs(raw_rate)
+            # previous_rate = abs(previous_rate)
+            if previous_rate < 0.001 and raw_rate > 0.5:
+                previous_rate = raw_rate
+            if raw_rate > (1 + max_change) * previous_rate:
+                # Limit large upward jump
+                rate = (1 + max_change) * previous_rate
+            elif raw_rate < (1 - max_change) * previous_rate:
+                # Limit sudden downward drop
+                rate = (1 - max_change) * previous_rate
+            else:
+                rate = raw_rate
+
+            previous_rate = rate  # update for next time
+            
 
         df.at[df.index[-1], "Wicking Rate"] = rate
 
@@ -138,7 +151,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         cv2.rectangle(frame, (bbox_x, area_of_interest_y1), (bbox_x + bbox_w, area_of_interest_y2), (0, 255, 0), 1)
         cv2.imshow("Sliding Window", frame)
 
-        # Plot every 15 seconds
+        # Plot every 10 seconds
         if now > plot_time:
             plot_time += datetime.timedelta(seconds=10)
 
