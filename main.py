@@ -31,18 +31,17 @@ def main():
     
     cam.start()
     print("Starting calibration...")
-    bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pixel = calibration(cam, height, width)
+    bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel = calibration(cam, height, width)
     average_base_color = base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h)
     print("Calibration complete.")
-
     
     start_sliding_window_input = str(input("Enter y to start wicking tracker: "))
     if start_sliding_window_input.upper() == "Y":
-        df, plot_image = sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_cm, cm_per_pixel, average_base_color)
+        df, plot_image, height_plot_image = sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color)
 
         save_data_input = str(input("Enter y to save data: "))
         if save_data_input.upper() == "Y":
-            save_data(df, plot_image)
+            save_data(df, plot_image, height_plot_image)
 
     cam.stop()
 

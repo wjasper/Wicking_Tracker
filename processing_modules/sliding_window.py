@@ -31,7 +31,7 @@ def gaussian_weighted_mean(region):
 
 
 def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color):
-    df, plot_image = None, None
+    df, plot_image, height_plot_image = None, None, None
     area_of_interest_offset = 0
     height = 0
     rate = 0
@@ -44,7 +44,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     plot_time = start_time + datetime.timedelta(seconds=15)
 
     # data_list = []
-    df = pd.DataFrame(columns=['Time', 'Height', 'Wicking Rate'])
+    df = pd.DataFrame(columns=['Time', 'Height', 'Wicking Rate','Avg Wicking Rate'])
 
     # plot setup
     plt.ion()
@@ -94,8 +94,8 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             last_height_update_time = now
             last_height_value = height
 
-        # [ADDED] Reduce threshold if no height change for 30 seconds
-        if (now - last_height_update_time).total_seconds() > 30:
+        # [ADDED] Reduce threshold if no height change for 10 seconds
+        if (now - last_height_update_time).total_seconds() > 10:
             new_threshold = current_delta_threshold * 0.9
             current_delta_threshold = max(new_threshold, 5)
             print(f"[INFO] No height change in 30s. Reducing delta threshold to {current_delta_threshold:.2f}")
@@ -104,7 +104,8 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         # Update data
         # data_list.append([delta_time, height])
         # df = pd.DataFrame(data_list, columns=['Time', 'Height'])
-        df.loc[len(df)] = [delta_time, height, 0] 
+        avg_rate = height / delta_time if delta_time > 0 else 0
+        df.loc[len(df)] = [delta_time, height, 0, avg_rate] 
 
         # Calculate wicking rate using cubic polynomial (sliding 4-point window)
         if len(df) >= 4:
@@ -138,6 +139,11 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
 
         # Print live values
         print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Delta Gauss: {delta_gaussian:.4f} | Height: {height:.4f} mm | Wicking Rate: {rate:.4f} mm/s")
+
+        if delta_time > 0:
+            print(f"Avg Wicking Rate: {height/delta_time:.4f} mm/s")
+        else:
+            print("Avg Wicking Rate: N/A (delta_time is zero)")
 
         # Adjust AOI
         if delta_E_mean > current_delta_threshold and height < height_in_mm:
@@ -177,6 +183,12 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             fig1.canvas.draw()
             fig2.canvas.draw()
             plt.pause(0.1)
+            
+            #Save Height Plot
+            buf1 = io.BytesIO()
+            fig1.savefig(buf1, format='png')
+            buf1.seek(0)
+            height_plot_image = Image.open(buf1)
 
             # Save Wicking Rate plot
             buf = io.BytesIO()
@@ -193,4 +205,4 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     plt.ioff()
     plt.close()
 
-    return df, plot_image
+    return df, plot_image, height_plot_image
