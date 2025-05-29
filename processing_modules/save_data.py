@@ -3,7 +3,7 @@ import json
 import datetime
 
 
-def save_data(df, plot_image, height_plot_image):
+def save_data(df, height_plot_image, wicking_plot_image=None):
     experiment_name = input("Enter Experiment Name: ")
 
     # Generate folder name with UTC timestamp
@@ -26,8 +26,8 @@ def save_data(df, plot_image, height_plot_image):
 
     # Save Wicking Rate Plot Image
     wicking_path = os.path.join(output_path, "wicking_plot.png")
-    if plot_image is not None:
-        plot_image.save(wicking_path)
+    if wicking_plot_image is not None:
+        wicking_plot_image.save(wicking_path)
     else:
         print("[WARNING] No wicking rate plot image to save — skipping wicking_plot.png")
 
@@ -48,4 +48,6 @@ def save_data(df, plot_image, height_plot_image):
         json.dump(metadata, f, indent=4)
 
     print(f"Data and plots saved to: {output_path}")
+
+    return csv_path
     

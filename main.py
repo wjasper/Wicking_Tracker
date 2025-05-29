@@ -35,16 +35,15 @@ def main():
     average_base_color = base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h)
     print("Calibration complete.")
     
-    start_sliding_window_input = str(input("Enter y to start wicking tracker: "))
-    if start_sliding_window_input.upper() == "Y":
-        df, plot_image, height_plot_image = sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color)
+    start_input = input("Enter y to start wicking tracker: ")
+    if start_input.strip().lower() != "y":
+        print("Aborted tracker.")
+        cam.stop()
+        return
 
-        save_data_input = str(input("Enter y to save data: "))
-        if save_data_input.upper() == "Y":
-            save_data(df, plot_image, height_plot_image)
+    sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color)
 
     cam.stop()
-
     print("Program completed successfully")
 
 if __name__ == "__main__":

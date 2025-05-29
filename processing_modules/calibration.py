@@ -12,7 +12,9 @@ class BoundingBox:
         self.drag_start_x = 0
         self.drag_start_y = 0
         self.resize_corner = None
-        self.cm_per_pixel = 0
+        self.mm_per_pixel = 0
+        self.selected_border = None  # Tracks which border is selected
+
 
     def handle_mouse(self, event, x, y, flags, param):
         height = param["height"]
@@ -144,10 +146,11 @@ def calibration(cam, height, width):
             break
 
     cv2.destroyAllWindows()
-    height_in_cm = int(input("Enter reading corresponding to the box in cms: "))
-    bbox.cm_per_pixel = height_in_cm / bbox.h
+    height_in_mm = int(input("Enter reading corresponding to the box in mm: "))
+    bbox.mm_per_pixel = height_in_mm / bbox.h
+    print("mm_per_pixel", bbox.mm_per_pixel)
 
-    return (bbox.x, bbox.y, bbox.w, bbox.h, height_in_cm, bbox.cm_per_pixel)
+    return (bbox.x, bbox.y, bbox.w, bbox.h, height_in_mm, bbox.mm_per_pixel)
 
 
 def base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h):

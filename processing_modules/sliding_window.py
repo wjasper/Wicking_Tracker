@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import io
 from PIL import Image
 from scipy.signal import savgol_filter
+from wicking_rate import plot_final_wicking_rate
+from save_data import save_data
 
 def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
@@ -51,9 +53,9 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     fig1 = plt.figure("Height Plot")
     ax1 = fig1.gca()
     ax1.clear()
-    fig2 = plt.figure("Wicking Rate Plot")
-    ax2 = fig2.gca()
-    ax2.clear()
+    # fig2 = plt.figure("Wicking Rate Plot")
+    # ax2 = fig2.gca()
+    # ax2.clear()
 
     original_delta_threshold = 40
     current_delta_threshold = original_delta_threshold
@@ -61,31 +63,41 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     last_height_value = 0
 
     while True:
-        simple_means = []
+        sliding_color_LAB = []
         gaussian_means = []
         area_of_interest_y1 = bbox_y + bbox_h + area_of_interest_offset - 10
         area_of_interest_y2 = bbox_y + bbox_h + area_of_interest_offset
 
-        for _ in range(10):
+        for _ in range(5):
             frame = cam.capture_array()
             if frame is None:
                 break
 
             region = frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w]
 
-            simple_mean = np.mean(cv2.cvtColor(region, cv2.COLOR_BGR2Lab), axis=(0, 1))
+            sliding_window = np.mean(cv2.cvtColor(region, cv2.COLOR_BGR2Lab), axis=(0, 1))
             weighted_mean = gaussian_weighted_mean(region)
 
-            simple_means.append(simple_mean)
+            sliding_color_LAB.append(sliding_window)
             gaussian_means.append(weighted_mean)
 
-        average_simple_color = np.mean(simple_means, axis=0)
+        average_sliding_window_color = np.mean(sliding_color_LAB, axis=0)
         average_gaussian_color = np.mean(gaussian_means, axis=0)
 
-        delta_E_mean = calculate_delta(average_base_color, average_simple_color)
+        delta_E_mean = calculate_delta(average_base_color, average_sliding_window_color)
         delta_gaussian = calculate_delta(average_base_color, average_gaussian_color)
 
         height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) -1
+
+        # Adjust AOI
+        if(delta_E_mean > current_delta_threshold and height < height_in_mm):
+            print(f"Delta greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
+            area_of_interest_offset -= 2
+
+            height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) -1
+
+        elif height >= height_in_mm:
+            area_of_interest_offset = 0
 
         now = datetime.datetime.now()
 
@@ -145,12 +157,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         else:
             print("Avg Wicking Rate: N/A (delta_time is zero)")
 
-        # Adjust AOI
-        if delta_E_mean > current_delta_threshold and height < height_in_mm:
-            print(f"Delta greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
-            area_of_interest_offset -= 1
-        elif height >= height_in_mm:
-            area_of_interest_offset = 0
+
 
         # Draw bounding boxes
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
@@ -168,20 +175,20 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             ax1.set_xlabel("Time (seconds)")
             ax1.set_ylabel("Height (mm)")
 
-            # Plot wicking rate
-            ax2.clear()
-            # sns.lineplot(ax=ax2, data=df, x="Time", y="Wicking Rate")
-            df_plot = df.copy()
+            # # Plot wicking rate
+            # ax2.clear()
+            # # sns.lineplot(ax=ax2, data=df, x="Time", y="Wicking Rate")
+            # df_plot = df.copy()
 
-            df_plot["Smoothed Wicking Rate"] = df["Wicking Rate"]
-            sns.lineplot(ax=ax2, data=df_plot, x="Time", y="Smoothed Wicking Rate")
+            # df_plot["Smoothed Wicking Rate"] = df["Wicking Rate"]
+            # sns.lineplot(ax=ax2, data=df_plot, x="Time", y="Smoothed Wicking Rate")
             
-            ax2.set_title("Wicking Rate Over Time")
-            ax2.set_xlabel("Time (seconds)")
-            ax2.set_ylabel("Wicking Rate")
+            # ax2.set_title("Wicking Rate Over Time")
+            # ax2.set_xlabel("Time (seconds)")
+            # ax2.set_ylabel("Wicking Rate")
 
             fig1.canvas.draw()
-            fig2.canvas.draw()
+            # fig2.canvas.draw()
             plt.pause(0.1)
             
             #Save Height Plot
@@ -190,11 +197,11 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             buf1.seek(0)
             height_plot_image = Image.open(buf1)
 
-            # Save Wicking Rate plot
-            buf = io.BytesIO()
-            fig2.savefig(buf, format='png')
-            buf.seek(0)
-            plot_image = Image.open(buf)
+            # # Save Wicking Rate plot
+            # buf = io.BytesIO()
+            # fig2.savefig(buf, format='png')
+            # buf.seek(0)
+            # plot_image = Image.open(buf)
 
         # Exit
         key = cv2.waitKeyEx(40)
@@ -205,4 +212,10 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     plt.ioff()
     plt.close()
 
-    return df, plot_image, height_plot_image
+
+    save_input = input("Enter y to save data: ")
+    if save_input.strip().lower() == "y":
+        csv_path = save_data(df, height_plot_image)
+        plot_final_wicking_rate(csv_path, apply_smoothing=True)
+    
+    return df, height_plot_image
