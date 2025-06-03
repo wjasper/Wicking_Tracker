@@ -39,12 +39,20 @@ filtered_height = apply_filter(signal, cutoff=0.1, fs=fs)
 spline = CubicSpline(t, filtered_height)
 wicking_rate = np.abs(spline.derivative()(t))
 
-# Plot Wicking Rate
+df["Filtered Wicking Rate"] = wicking_rate
+
 plt.figure(figsize=(10, 6))
+
+# Plot raw wicking rate (from CSV)
+if "Wicking Rate" in df.columns:
+    plt.plot(df["Time"], df["Wicking Rate"], label="Raw Wicking Rate", color='gray', linestyle='--', alpha=0.6)
+
+# Plot filtered wicking rate (spline derivative)
 plt.plot(df["Time"], df["Filtered Wicking Rate"], label="Filtered Wicking Rate", color='orange')
+
 plt.xlabel("Time [s]")
 plt.ylabel("Wicking Rate (mm/s)")
-plt.title("Wicking Rate from Filtered Height")
+plt.title("Raw vs Filtered Wicking Rate")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
@@ -52,21 +60,12 @@ plt.tight_layout()
 
 
 plt.figure(figsize=(10, 6))
+plt.plot(df["Time"], df["Height"], label="Raw Height", color='gray', alpha=0.6)
 plt.plot(df["Time"], df["Filtered Height"], label="Filtered Height", color='orange')
 plt.xlabel("Time [s]")
-plt.ylabel("Filtered Height mms")
-plt.title("Filtered Height")
+plt.ylabel("Height (mm)")
+plt.title("Raw vs Filtered Height")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
-
-plt.figure(figsize=(10, 6))
-plt.plot(df["Time"], df["Height"], label="Height", color='orange')
-plt.xlabel("Time [s]")
-plt.ylabel("Height mms")
-plt.title("Height")
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-
 plt.show()
