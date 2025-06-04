@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Mar 13 14:20:15 2025
+@author: Dr. Warren Jasper
+"""
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
