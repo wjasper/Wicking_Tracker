@@ -34,7 +34,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     ax1 = fig1.gca()
     ax1.clear()
 
-    original_delta_threshold = 40
+    original_delta_threshold = 38
     current_delta_threshold = original_delta_threshold
     last_height_update_time = start_time
     last_height_value = 0
@@ -57,7 +57,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         delta_E_mean = calculate_delta(average_base_color, average_sliding_window_color)
         
 
-        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) -1
+        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) -3
 
         # Adjust AOI
         if(delta_E_mean > current_delta_threshold and height < height_in_mm):
@@ -88,7 +88,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         df.loc[len(df)] = [delta_time, height, 0, avg_rate] 
 
         # Print live values
-        print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm")
+        print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Delta Threshold: {current_delta_threshold:.2f} mm")
 
         if delta_time > 0:
             print(f"Avg Wicking Rate: {height/delta_time:.4f} mm/s")

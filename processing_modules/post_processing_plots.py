@@ -1,4 +1,3 @@
-
 def post_process_wicking_rate(df):
     import pandas as pd
     import numpy as np
@@ -36,7 +35,7 @@ def post_process_wicking_rate(df):
 
     # 5) Estimate sampling frequency and apply filter
     fs = 1 / np.mean(np.diff(t_uniform))
-    cutoff = 0.07  # Hz
+    cutoff = 0.25  # Hz
     order = 8
     cascade = 2
 
@@ -79,7 +78,7 @@ def post_process_wicking_rate(df):
     # 9) Plot Wicking Rate: Raw vs Smoothed
     buf_wick = BytesIO()
     plt.figure(figsize=(12, 6))
-    plt.plot(t, wicking_rate_spline, label="wicking_rate_spline", color="black", linestyle="--", alpha=0.5)
+    # plt.plot(t, wicking_rate_spline, label="wicking_rate_spline", color="black", linestyle="--", alpha=0.5)
     plt.plot(t_uniform, wicking_rate_filtered, label="wicking_rate_filtered", color="red", alpha=0.8)
     # plt.plot(t_uniform, wicking_rate_uniform, label="wicking_rate_uniform", color="blue", alpha=0.8)
     plt.xlabel("Time [s]")

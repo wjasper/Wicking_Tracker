@@ -31,7 +31,16 @@ def main():
     
     cam.start()
     print("Starting calibration...")
-    bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel = calibration(cam, height, width)
+
+    result = calibration(cam, height, width)
+    if result is None:
+        print("Calibration was cancelled.")
+        cam.stop()
+        return
+
+    bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel = result
+    
+    
     average_base_color = base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h)
     print("Calibration complete.")
     

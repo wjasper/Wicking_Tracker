@@ -3,7 +3,7 @@ import numpy as np
 
 
 class BoundingBox:
-    def __init__(self, x=150, y=100, w=300, h=200):
+    def __init__(self, x=204, y=18, w=140, h=391):
         self.x = x
         self.y = y
         self.w = w
@@ -91,7 +91,7 @@ class BoundingBox:
 
 
 def calibration(cam, height, width):
-    bbox = BoundingBox()
+    bbox = BoundingBox(x=204, y=18, w=140, h=391)
     cv2.namedWindow("Calibration")
     cv2.setMouseCallback("Calibration", bbox.handle_mouse, {"height": height, "width": width})
     instructions = "Drag corners to resize, drag center to move. Press 'q' to quit."
@@ -102,17 +102,17 @@ def calibration(cam, height, width):
         if frame is None:
             break
 
-        if not found_initial_bbox and not bbox.dragging:
-            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    #     if not found_initial_bbox and not bbox.dragging:
+    #         gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+    #         _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+    #         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            if contours:
-                largest = max(contours, key=cv2.contourArea)
-                x, y, w, h = cv2.boundingRect(largest)
-                if w > 50 and h > 50:
-                    bbox.x, bbox.y, bbox.w, bbox.h = x, y, w, h
-                    found_initial_bbox = True
+    #         if contours:
+    #             largest = max(contours, key=cv2.contourArea)
+    #             x, y, w, h = cv2.boundingRect(largest)
+    #             if w > 50 and h > 50:
+    #                 bbox.x, bbox.y, bbox.w, bbox.h = x, y, w, h
+    #                 found_initial_bbox = True
 
         # Draw bounding box
         cv2.rectangle(frame, (bbox.x, bbox.y), (bbox.x + bbox.w, bbox.y + bbox.h), (0, 0, 255), 2)
@@ -146,9 +146,22 @@ def calibration(cam, height, width):
             break
 
     cv2.destroyAllWindows()
-    height_in_mm = int(input("Enter reading corresponding to the box in mm: "))
-    bbox.mm_per_pixel = height_in_mm / bbox.h
-    print("mm_per_pixel", bbox.mm_per_pixel)
+
+    try:
+        user_input = input("Enter reading corresponding to the box in mm (or press Enter to quit): ")
+        if user_input.strip() == "":
+            print("Quitting calibration...")
+            return None  # or raise SystemExit if you want to exit the program
+        height_in_mm = int(user_input)
+    except ValueError:
+        print("Invalid input. Exiting.")
+        return None
+    
+    bbox.mm_per_pixel = 0.452127  
+    # height_in_mm = bbox.mm_per_pixel * bbox.h
+
+    print("Hardcoded mm_per_pixel:", bbox.mm_per_pixel)
+    print("Calculated height_in_mm:", height_in_mm)
 
     return (bbox.x, bbox.y, bbox.w, bbox.h, height_in_mm, bbox.mm_per_pixel)
 
