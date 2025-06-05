@@ -3,7 +3,7 @@ import numpy as np
 
 
 class BoundingBox:
-    def __init__(self, x=204, y=18, w=140, h=391):
+    def __init__(self, x=240, y=18, w=132, h=391):
         self.x = x
         self.y = y
         self.w = w
@@ -19,7 +19,7 @@ class BoundingBox:
     def handle_mouse(self, event, x, y, flags, param):
         height = param["height"]
         width = param["width"]
-        sensitivity = 15
+        sensitivity = 30
 
         top_left = (self.x, self.y)
         top_right = (self.x + self.w, self.y)
@@ -27,23 +27,44 @@ class BoundingBox:
         bottom_right = (self.x + self.w, self.y + self.h)
 
         if event == cv2.EVENT_LBUTTONDOWN:
+            # Corner resize
             if abs(x - top_left[0]) < sensitivity and abs(y - top_left[1]) < sensitivity:
                 self.resize_corner = "top_left"
                 self.dragging = True
+                self.selected_border = None
             elif abs(x - top_right[0]) < sensitivity and abs(y - top_right[1]) < sensitivity:
                 self.resize_corner = "top_right"
                 self.dragging = True
+                self.selected_border = None
             elif abs(x - bottom_left[0]) < sensitivity and abs(y - bottom_left[1]) < sensitivity:
                 self.resize_corner = "bottom_left"
                 self.dragging = True
+                self.selected_border = None
             elif abs(x - bottom_right[0]) < sensitivity and abs(y - bottom_right[1]) < sensitivity:
                 self.resize_corner = "bottom_right"
                 self.dragging = True
+                self.selected_border = None
+
+            # Border select (prioritized before drag-inside)
+            elif abs(y - self.y) < sensitivity and self.x < x < self.x + self.w:
+                self.selected_border = "top"
+            elif abs(y - (self.y + self.h)) < sensitivity and self.x < x < self.x + self.w:
+                self.selected_border = "bottom"
+            elif abs(x - self.x) < sensitivity and self.y < y < self.y + self.h:
+                self.selected_border = "left"
+            elif abs(x - (self.x + self.w)) < sensitivity and self.y < y < self.y + self.h:
+                self.selected_border = "right"
+
+            # Drag inside
             elif self.x < x < self.x + self.w and self.y < y < self.y + self.h:
                 self.resize_corner = "move"
                 self.dragging = True
                 self.drag_start_x = x - self.x
                 self.drag_start_y = y - self.y
+                self.selected_border = None
+
+            else:
+                self.selected_border = None
 
         elif event == cv2.EVENT_MOUSEMOVE and self.dragging:
             x = max(0, min(x, width))
@@ -91,10 +112,10 @@ class BoundingBox:
 
 
 def calibration(cam, height, width):
-    bbox = BoundingBox(x=204, y=18, w=140, h=391)
+    bbox = BoundingBox(x=240, y=18, w=132, h=391)
     cv2.namedWindow("Calibration")
     cv2.setMouseCallback("Calibration", bbox.handle_mouse, {"height": height, "width": width})
-    instructions = "Drag corners to resize, drag center to move. Press 'q' to quit."
+    instructions = "Drag corners to resize, drag center to move. Press 'q' to quit." 
     found_initial_bbox = False
 
     while True:
@@ -127,23 +148,55 @@ def calibration(cam, height, width):
         cv2.putText(frame, instructions, (10, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         cv2.putText(frame, f"Box: x={bbox.x}, y={bbox.y}, w={bbox.w}, h={bbox.h}", (10, height - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
+        if bbox.selected_border:
+            cv2.putText(frame, f"Selected: {bbox.selected_border}", (10, height - 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+
         cv2.imshow("Calibration", frame)
         key = cv2.waitKeyEx(40)
 
-        if key == 56 and bbox.y > 0:
-            bbox.y -= 2
-            bbox.h += 2
-        elif key == 50 and bbox.h > 50:
-            bbox.y += 2
-            bbox.h -= 2
-        elif key == 52 and bbox.x > 0:
-            bbox.x -= 2
-            bbox.w += 2
-        elif key == 54 and bbox.w > 50:
-            bbox.x += 2
-            bbox.w -= 2
-        elif key == ord("q"):
+        if key == ord("q"):
             break
+
+        # UP
+        if key == 56:  # up arrow
+            if bbox.selected_border == "top" and bbox.h > 50:
+                bbox.y -= 2
+                bbox.h += 2
+            elif bbox.selected_border == "bottom" and bbox.h > 50:
+                bbox.h -= 2
+            elif bbox.selected_border == "move" and bbox.y > 0:
+                bbox.y -= 2
+
+        # DOWN
+        elif key == 50:
+            if bbox.selected_border == "top" and bbox.h > 50:
+                bbox.y += 2
+                bbox.h -= 2
+            elif bbox.selected_border == "bottom":
+                bbox.h += 2
+            elif bbox.selected_border == "move" and bbox.y + bbox.h < height:
+                bbox.y += 2
+
+        # LEFT
+        elif key == 52:
+            if bbox.selected_border == "left" and bbox.w > 50:
+                bbox.x -= 2
+                bbox.w += 2
+            elif bbox.selected_border == "right" and bbox.w > 50:
+                bbox.w -= 2
+            elif bbox.selected_border == "move" and bbox.x > 0:
+                bbox.x -= 2
+
+        # RIGHT
+        elif key == 54:
+            if bbox.selected_border == "left" and bbox.w > 50:
+                bbox.x += 2
+                bbox.w -= 2
+            elif bbox.selected_border == "right":
+                bbox.w += 2
+            elif bbox.selected_border == "move" and bbox.x + bbox.w < width:
+                bbox.x += 2
 
     cv2.destroyAllWindows()
 
