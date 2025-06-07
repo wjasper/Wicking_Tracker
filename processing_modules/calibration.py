@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-
+from PyQt5.QtWidgets import QApplication, QInputDialog
 
 class BoundingBox:
     def __init__(self, x=240, y=18, w=132, h=391):
@@ -200,16 +200,24 @@ def calibration(cam, height, width):
 
     cv2.destroyAllWindows()
 
-    try:
-        user_input = input("Enter reading corresponding to the box in mm (or press Enter to quit): ")
-        if user_input.strip() == "":
-            print("Quitting calibration...")
-            return None  # or raise SystemExit if you want to exit the program
-        height_in_mm = int(user_input)
-    except ValueError:
-        print("Invalid input. Exiting.")
-        return None
-    
+    height_in_mm = None
+    while True:
+        text, ok = QInputDialog.getText(
+            None,
+            "Enter Height in mm",
+            "Enter reading corresponding to the box height in mm (leave blank to cancel):"
+        )
+
+        if not ok or text.strip() == "":
+            QMessageBox.information(None, "Cancelled", "Quitting calibration...")
+            return None
+
+        try:
+            height_in_mm = int(text)
+            break
+        except ValueError:
+            QMessageBox.warning(None, "Invalid Input", "Please enter a valid integer.")
+        
     bbox.mm_per_pixel = 0.452127  
     # height_in_mm = bbox.mm_per_pixel * bbox.h
 
