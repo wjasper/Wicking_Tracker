@@ -302,6 +302,8 @@ class WickingDashboard(QMainWindow):
         else:
             self.ax.text(0.5, 0.5, "No CSV data found", transform=self.ax.transAxes,
                          ha='center', va='center', fontsize=12, color='red')
+        # Force fresh plot rendering based on current plot mode
+        self.plot_selected_experiments()
         self.plot_area.draw()
 
         if os.path.exists(json_path):
@@ -317,24 +319,30 @@ class WickingDashboard(QMainWindow):
 
     def plot_selected_experiments(self):
         self.ax.clear()
+
+        # Ensure plot_mode is always synced to radio button
+        self.plot_mode = "height" if self.height_radio.isChecked() else "wicking"
+
         selected_items = self.exp_list.selectedItems()
         if not selected_items:
             self.ax.text(0.5, 0.5, "No experiments selected", transform=self.ax.transAxes,
-                         ha='center', va='center', fontsize=12, color='gray')
+                        ha='center', va='center', fontsize=12, color='gray')
             self.plot_area.draw()
             return
 
         for item in selected_items:
-            folder_name = self.folder_display_map[item.text()]
+            full_display_name = item.text()
+            plot_name = full_display_name.split("–")[0].strip()
+            folder_name = self.folder_display_map[full_display_name]
             folder = os.path.join(self.output_dir, folder_name)
             csv_path = os.path.join(folder, "data.csv")
             if os.path.exists(csv_path):
                 try:
                     df = pd.read_csv(csv_path)
                     if self.plot_mode == "height":
-                        self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], label=folder_name)
+                        self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], label=plot_name)
                     elif self.plot_mode == "wicking":
-                        self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], label=folder_name)
+                        self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], label=plot_name)
                 except Exception as e:
                     print(f"Error reading {folder_name}: {e}")
 
