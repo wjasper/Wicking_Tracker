@@ -7,12 +7,30 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import subprocess
 import threading
+from datetime import datetime
+import pytz
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
     QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame, QLineEdit, QInputDialog, QSplitter
 )
 from PyQt5.QtCore import Qt
+
+def format_folder_name(folder_name):
+    try:
+        # Extract the last part after the last underscore as timestamp
+        parts = folder_name.split("_")
+        timestamp_part = parts[-2] + "_" + parts[-1]  # e.g., 20250411_204440
+        name_part = "_".join(parts[:-2])  # everything before timestamp
+
+        dt_utc = datetime.strptime(timestamp_part, "%Y%m%d_%H%M%S")
+        dt_utc = pytz.utc.localize(dt_utc)
+        dt_et = dt_utc.astimezone(pytz.timezone("America/New_York"))
+        readable = dt_et.strftime("%b %d, %Y at %I:%M %p")
+        return f"{name_part} – {readable} (ET)"
+    except Exception:
+        return folder_name  # fallback if formatting fails
+
 
 
 class WickingDashboard(QMainWindow):
@@ -223,12 +241,16 @@ class WickingDashboard(QMainWindow):
 
     def filter_experiments(self, text):
         self.exp_list.clear()
+        self.folder_display_map = {}  # new mapping: pretty -> original
+
         filtered = [f for f in self.all_folders if text.lower() in f.lower()]
         for folder in filtered:
-            self.exp_list.addItem(folder)
+            display_name = format_folder_name(folder)
+            self.folder_display_map[display_name] = folder
+            self.exp_list.addItem(display_name)
 
     def display_experiment_data(self, item):
-        folder_name = item.text()
+        folder_name = self.folder_display_map[item.text()]
         folder = os.path.join(self.output_dir, folder_name)
         csv_path = os.path.join(folder, "data.csv")
         json_path = os.path.join(folder, "metadata.json")
@@ -274,7 +296,7 @@ class WickingDashboard(QMainWindow):
             return
 
         for item in selected_items:
-            folder_name = item.text()
+            folder_name = self.folder_display_map[item.text()]
             folder = os.path.join(self.output_dir, folder_name)
             csv_path = os.path.join(folder, "data.csv")
             if os.path.exists(csv_path):
