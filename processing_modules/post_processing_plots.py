@@ -1,4 +1,4 @@
-def post_process_wicking_rate(df):
+def post_process_wicking_rate(df, show_plots=True):
     import pandas as pd
     import numpy as np
     import matplotlib.pyplot as plt
@@ -56,6 +56,7 @@ def post_process_wicking_rate(df):
     df["Time_Uniform"] = t_uniform
     df["Filtered Height (Uniform)"] = h_uniform
     df["Filtered Height (Raw)"] = h_filtered
+    df["Wicking Rate Filtered (Spline)"] = wicking_rate_filtered
     df["Wicking Rate (Spline)"] = wicking_rate_spline
 
     # 8) Plot Height Comparisons
@@ -92,6 +93,7 @@ def post_process_wicking_rate(df):
     buf_wick.seek(0)
     wicking_plot_image = Image.open(buf_wick)
 
-    plt.show()
+    if show_plots:
+        plt.show()
 
     return df, height_plot_image, wicking_plot_image

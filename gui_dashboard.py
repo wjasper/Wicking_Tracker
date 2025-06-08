@@ -9,19 +9,17 @@ import subprocess
 import threading
 from datetime import datetime
 import pytz
-
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
-    QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame, QLineEdit, QInputDialog, QSplitter
+    QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame, QLineEdit, QInputDialog, QSplitter, QRadioButton, QButtonGroup, QCheckBox
 )
 from PyQt5.QtCore import Qt
 
 def format_folder_name(folder_name):
     try:
-        # Extract the last part after the last underscore as timestamp
         parts = folder_name.split("_")
-        timestamp_part = parts[-2] + "_" + parts[-1]  # e.g., 20250411_204440
-        name_part = "_".join(parts[:-2])  # everything before timestamp
+        timestamp_part = parts[-2] + "_" + parts[-1]
+        name_part = "_".join(parts[:-2])
 
         dt_utc = datetime.strptime(timestamp_part, "%Y%m%d_%H%M%S")
         dt_utc = pytz.utc.localize(dt_utc)
@@ -29,8 +27,7 @@ def format_folder_name(folder_name):
         readable = dt_et.strftime("%b %d, %Y at %I:%M %p")
         return f"{name_part} – {readable} (ET)"
     except Exception:
-        return folder_name  # fallback if formatting fails
-
+        return folder_name
 
 
 class WickingDashboard(QMainWindow):
@@ -53,8 +50,8 @@ class WickingDashboard(QMainWindow):
         """)
 
         self.output_dir = output_dir
+        self.plot_mode = "height"
 
-        # === Sidebar ===
         self.sidebar_frame = QFrame()
         self.sidebar_frame.setStyleSheet("background-color: #ffffff;")
         self.sidebar_frame.setFixedWidth(200)
@@ -104,22 +101,18 @@ class WickingDashboard(QMainWindow):
 
         self.sidebar_frame.setLayout(sidebar_layout)
 
-        # === Stack Views (Start + Experiments) ===
         self.stack = QStackedWidget()
         self.init_start_view()
         self.init_experiment_view()
 
-        # === Layout for Sidebar + Main Stack ===
         self.main_layout = QHBoxLayout()
         self.main_layout.addWidget(self.sidebar_frame)
         self.main_layout.addWidget(self.stack)
 
-        # === Top Header Bar with Toggle Button ===
         self.header_bar = QHBoxLayout()
         self.header_bar.addWidget(self.toggle_btn)
         self.header_bar.addStretch()
 
-        # === Final Layout ===
         main_container = QVBoxLayout()
         main_container.addLayout(self.header_bar)
         main_container.addLayout(self.main_layout)
@@ -130,12 +123,13 @@ class WickingDashboard(QMainWindow):
 
         self.show_start_view()
 
+    def update_plot_mode(self):
+        selected_items = self.exp_list.selectedItems()
+        if selected_items:
+            self.plot_selected_experiments()
 
     def toggle_sidebar(self):
-        if self.sidebar_frame.isVisible():
-            self.sidebar_frame.hide()
-        else:
-            self.sidebar_frame.show()
+        self.sidebar_frame.setVisible(not self.sidebar_frame.isVisible())
 
     def init_start_view(self):
         start_widget = QWidget()
@@ -167,22 +161,40 @@ class WickingDashboard(QMainWindow):
     def init_experiment_view(self):
         view_widget = QWidget()
         outer_layout = QVBoxLayout()
-        # inner_layout = QHBoxLayout()
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("🔍 Search experiments...")
         self.search_bar.textChanged.connect(self.filter_experiments)
 
         self.exp_list = QListWidget()
-        self.exp_list.setSelectionMode(QListWidget.MultiSelection)
+        self.exp_list.setSelectionMode(QListWidget.SingleSelection)
         self.exp_list.itemClicked.connect(self.display_experiment_data)
+
+        self.multi_select_checkbox = QCheckBox("Enable multi-select")
+        self.multi_select_checkbox.stateChanged.connect(self.toggle_selection_mode)
 
         self.plot_selected_button = QPushButton("📈 Plot Selected")
         self.plot_selected_button.clicked.connect(self.plot_selected_experiments)
 
+        self.height_radio = QRadioButton("Height")
+        self.wicking_radio = QRadioButton("Wicking Rate")
+
+        self.radio_group = QButtonGroup()
+        self.radio_group.addButton(self.height_radio)
+        self.radio_group.addButton(self.wicking_radio)
+
+        self.height_radio.toggled.connect(self.on_radio_change)
+        self.wicking_radio.toggled.connect(self.on_radio_change)
+        self.height_radio.setChecked(True)
+
+        radio_layout = QHBoxLayout()
+        radio_layout.addWidget(self.height_radio)
+        radio_layout.addWidget(self.wicking_radio)
+
         left_panel = QVBoxLayout()
         left_panel.addWidget(self.search_bar)
         left_panel.addWidget(self.exp_list)
+        left_panel.addWidget(self.multi_select_checkbox)
         left_panel.addWidget(self.plot_selected_button)
 
         left_widget = QWidget()
@@ -191,23 +203,37 @@ class WickingDashboard(QMainWindow):
         self.plot_area = FigureCanvas(Figure(figsize=(5, 4)))
         self.ax = self.plot_area.figure.add_subplot(111)
 
+        plot_container = QVBoxLayout()
+        plot_container.addLayout(radio_layout)
+        plot_container.addWidget(self.plot_area)
+
+        plot_widget = QWidget()
+        plot_widget.setLayout(plot_container)
+
         self.meta_view = QTextEdit()
         self.meta_view.setReadOnly(True)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(left_widget)
-        splitter.addWidget(self.plot_area)
+        splitter.addWidget(plot_widget)
         splitter.addWidget(self.meta_view)
-
-        # Optional: Set initial sizes (you can tweak these)
         splitter.setSizes([250, 600, 350])
 
-        # Add to the main experiment layout
         outer_layout.addWidget(splitter)
-
         view_widget.setLayout(outer_layout)
         self.stack.addWidget(view_widget)
         self.refresh_experiment_list()
+
+    def on_radio_change(self):
+        if self.height_radio.isChecked():
+            self.plot_mode = "height"
+        elif self.wicking_radio.isChecked():
+            self.plot_mode = "wicking"
+        self.update_plot_mode()
+
+    def toggle_selection_mode(self, state):
+        mode = QListWidget.MultiSelection if state == Qt.Checked else QListWidget.SingleSelection
+        self.exp_list.setSelectionMode(mode)
 
     def show_start_view(self):
         self.stack.setCurrentIndex(0)
@@ -241,8 +267,7 @@ class WickingDashboard(QMainWindow):
 
     def filter_experiments(self, text):
         self.exp_list.clear()
-        self.folder_display_map = {}  # new mapping: pretty -> original
-
+        self.folder_display_map = {}
         filtered = [f for f in self.all_folders if text.lower() in f.lower()]
         for folder in filtered:
             display_name = format_folder_name(folder)
@@ -259,14 +284,18 @@ class WickingDashboard(QMainWindow):
         if os.path.exists(csv_path):
             try:
                 df = pd.read_csv(csv_path)
-                if 'Time' in df.columns and 'Height' in df.columns:
-                    self.ax.plot(df["Time"], df["Height"], marker='o', linestyle='-')
+                if self.plot_mode == "height" and 'Time_Uniform' in df.columns and 'Filtered Height (Raw)' in df.columns:
+                    self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], linestyle='-')
                     self.ax.set_title(f"{folder_name} - Height vs Time")
-                    self.ax.set_xlabel("Time")
-                    self.ax.set_ylabel("Height")
+                    self.ax.set_ylabel("Height (mm)")
+                elif self.plot_mode == "wicking" and 'Time_Uniform' in df.columns and 'Wicking Rate Filtered (Spline)' in df.columns:
+                    self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], linestyle='-', color='red')
+                    self.ax.set_title(f"{folder_name} - Wicking Rate")
+                    self.ax.set_ylabel("Wicking Rate (mm/s)")
                 else:
-                    self.ax.text(0.5, 0.5, "Time or Height column missing", transform=self.ax.transAxes,
+                    self.ax.text(0.5, 0.5, "Required columns missing", transform=self.ax.transAxes,
                                  ha='center', va='center', fontsize=12, color='red')
+                self.ax.set_xlabel("Time")
             except Exception as e:
                 self.ax.text(0.5, 0.5, f"Failed to load plot:\n{e}", transform=self.ax.transAxes,
                              ha='center', va='center', fontsize=10, color='red')
@@ -302,18 +331,19 @@ class WickingDashboard(QMainWindow):
             if os.path.exists(csv_path):
                 try:
                     df = pd.read_csv(csv_path)
-                    if 'Time' in df.columns and 'Height' in df.columns:
-                        self.ax.plot(df["Time"], df["Height"], label=folder_name, linewidth=2)
+                    if self.plot_mode == "height":
+                        self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], label=folder_name)
+                    elif self.plot_mode == "wicking":
+                        self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], label=folder_name)
                 except Exception as e:
                     print(f"Error reading {folder_name}: {e}")
 
-        self.ax.set_title("Height vs Time - Multiple Experiments")
-        self.ax.set_xlabel("Time (min)")
-        self.ax.set_ylabel("Height (mm)")
+        self.ax.set_title("Height vs Time" if self.plot_mode == "height" else "Wicking Rate")
+        self.ax.set_xlabel("Time")
+        self.ax.set_ylabel("Height" if self.plot_mode == "height" else "Wicking Rate")
         self.ax.legend()
         self.ax.grid(True, linestyle='--', alpha=0.5)
         self.plot_area.draw()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
