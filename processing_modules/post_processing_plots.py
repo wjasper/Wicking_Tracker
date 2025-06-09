@@ -28,6 +28,9 @@ def post_process_wicking_rate(df):
 
     def apply_butterworth(data, cutoff, fs, order=6, cascade=2):
         b, a = butter_lowpass(cutoff, fs, order)
+        if len(data) <= 3 * max(len(a), len(b)):
+            print("[WARNING] Signal too short to apply Butterworth filter — skipping filtering.")
+            return data  # Return unfiltered
         y = data.copy()
         for _ in range(cascade):
             y = filtfilt(b, a, y)
