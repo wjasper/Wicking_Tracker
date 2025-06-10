@@ -2,18 +2,19 @@ import sys
 import os
 import json
 import pandas as pd
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt, QDate
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
+    QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame,
+    QLineEdit, QInputDialog, QSplitter, QRadioButton, QButtonGroup, QCheckBox,
+    QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit
+)
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import subprocess
 import threading
 from datetime import datetime
 import pytz
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
-    QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame, QLineEdit, QInputDialog, QSplitter, QRadioButton, QButtonGroup, QCheckBox
-)
-from PyQt5.QtCore import Qt
 
 def format_folder_name(folder_name):
     try:
@@ -29,13 +30,11 @@ def format_folder_name(folder_name):
     except Exception:
         return folder_name
 
-
 class WickingDashboard(QMainWindow):
     def __init__(self, output_dir):
         super().__init__()
         self.setWindowTitle("Wicking Tracker Dashboard")
         self.setGeometry(100, 100, 1200, 700)
-
         self.setStyleSheet("""
             QWidget {
                 background-color: #f0f2f5;
@@ -70,9 +69,8 @@ class WickingDashboard(QMainWindow):
         """)
         self.toggle_btn.clicked.connect(self.toggle_sidebar)
 
-        self.btn_start = QPushButton("▶ Start Wicking")
-        self.btn_view = QPushButton("📂 View Experiments")
-
+        self.btn_start = QPushButton("▶ Run Experiment")
+        self.btn_view = QPushButton("@View Experiments")
         for btn in [self.btn_start, self.btn_view]:
             btn.setStyleSheet("""
                 QPushButton {
@@ -98,7 +96,6 @@ class WickingDashboard(QMainWindow):
         sidebar_layout.addWidget(self.btn_start)
         sidebar_layout.addWidget(self.btn_view)
         sidebar_layout.addStretch()
-
         self.sidebar_frame.setLayout(sidebar_layout)
 
         self.stack = QStackedWidget()
@@ -122,11 +119,10 @@ class WickingDashboard(QMainWindow):
         self.setCentralWidget(container)
 
         self.show_start_view()
-
-    def update_plot_mode(self):
-        selected_items = self.exp_list.selectedItems()
-        if selected_items:
-            self.plot_selected_experiments()
+        self.status_window = QTextEdit()
+        self.status_window.setWindowTitle("Live Status")
+        self.status_window.setReadOnly(True)
+        self.status_window.resize(400, 200)
 
     def toggle_sidebar(self):
         self.sidebar_frame.setVisible(not self.sidebar_frame.isVisible())
@@ -155,7 +151,6 @@ class WickingDashboard(QMainWindow):
         layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addStretch()
         start_widget.setLayout(layout)
-
         self.stack.addWidget(start_widget)
 
     def init_experiment_view(self):
@@ -164,7 +159,7 @@ class WickingDashboard(QMainWindow):
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("🔍 Search experiments...")
-        self.search_bar.textChanged.connect(self.filter_experiments)
+        self.search_bar.textChanged.connect(self.apply_filters)
 
         self.exp_list = QListWidget()
         self.exp_list.setSelectionMode(QListWidget.SingleSelection)
@@ -182,7 +177,6 @@ class WickingDashboard(QMainWindow):
         self.radio_group = QButtonGroup()
         self.radio_group.addButton(self.height_radio)
         self.radio_group.addButton(self.wicking_radio)
-
         self.height_radio.toggled.connect(self.on_radio_change)
         self.wicking_radio.toggled.connect(self.on_radio_change)
         self.height_radio.setChecked(True)
@@ -213,10 +207,22 @@ class WickingDashboard(QMainWindow):
         self.meta_view = QTextEdit()
         self.meta_view.setReadOnly(True)
 
+        self.type_filter_label = QLabel("Filter by Experiment Type:")
+        self.type_filter_dropdown = QComboBox()
+        self.type_filter_dropdown.currentTextChanged.connect(self.apply_filters)
+
+        right_panel = QVBoxLayout()
+        right_panel.addWidget(self.type_filter_label)
+        right_panel.addWidget(self.type_filter_dropdown)
+        right_panel.addWidget(self.meta_view)
+
+        right_widget = QWidget()
+        right_widget.setLayout(right_panel)
+
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(left_widget)
         splitter.addWidget(plot_widget)
-        splitter.addWidget(self.meta_view)
+        splitter.addWidget(right_widget)
         splitter.setSizes([250, 600, 350])
 
         outer_layout.addWidget(splitter)
@@ -225,11 +231,8 @@ class WickingDashboard(QMainWindow):
         self.refresh_experiment_list()
 
     def on_radio_change(self):
-        if self.height_radio.isChecked():
-            self.plot_mode = "height"
-        elif self.wicking_radio.isChecked():
-            self.plot_mode = "wicking"
-        self.update_plot_mode()
+        self.plot_mode = "height" if self.height_radio.isChecked() else "wicking"
+        self.plot_selected_experiments()
 
     def toggle_selection_mode(self, state):
         mode = QListWidget.MultiSelection if state == Qt.Checked else QListWidget.SingleSelection
@@ -244,9 +247,8 @@ class WickingDashboard(QMainWindow):
 
     def handle_start_wicking(self):
         def run_main_py():
-            script_path = os.path.expanduser("main.py")
             try:
-                subprocess.run(["python", script_path], check=True)
+                subprocess.run(["python", "main.py"], check=True)
                 QTimer.singleShot(0, lambda: self.show_message(self, "Done", "Wicking tracking completed."))
             except subprocess.CalledProcessError:
                 QTimer.singleShot(0, lambda: self.show_message(self, "Error", "main.py failed to run."))
@@ -255,23 +257,49 @@ class WickingDashboard(QMainWindow):
         QMessageBox.information(self, "Started", "Wicking tracker started.")
 
     def refresh_experiment_list(self):
-        self.exp_list.clear()
-        self.all_folders = []
+        self.exp_info = []
         if not os.path.exists(self.output_dir):
             return
+
         for folder in os.listdir(self.output_dir):
             path = os.path.join(self.output_dir, folder)
             if os.path.isdir(path):
-                self.all_folders.append(folder)
-        self.filter_experiments(self.search_bar.text())
+                try:
+                    parts = folder.rsplit("_", 2)
+                    if len(parts) != 3:
+                        continue
+                    name_tokens = parts[0].split()
+                    exp_type = " ".join(name_tokens[:2]) if len(name_tokens) >= 2 else parts[0]
+                    dt = datetime.strptime(parts[1] + "_" + parts[2], "%Y%m%d_%H%M%S")
+                    self.exp_info.append({"folder": folder, "type": exp_type, "datetime": dt})
+                except:
+                    continue
 
-    def filter_experiments(self, text):
+        types = sorted(set(info["type"] for info in self.exp_info))
+        self.type_filter_dropdown.blockSignals(True)
+        self.type_filter_dropdown.clear()
+        self.type_filter_dropdown.addItem("All Types")
+        self.type_filter_dropdown.addItems(types)
+        self.type_filter_dropdown.blockSignals(False)
+
+        self.apply_filters()
+
+    def apply_filters(self):
+        search_text = self.search_bar.text().lower()
+        selected_type = self.type_filter_dropdown.currentText()
+
+        filtered = [
+            info for info in self.exp_info
+            if (selected_type == "All Types" or info["type"] == selected_type)
+            and (search_text in info["folder"].lower())
+        ]
+
+        filtered.sort(key=lambda x: x["datetime"], reverse=True)
         self.exp_list.clear()
         self.folder_display_map = {}
-        filtered = [f for f in self.all_folders if text.lower() in f.lower()]
-        for folder in filtered:
-            display_name = format_folder_name(folder)
-            self.folder_display_map[display_name] = folder
+        for info in filtered:
+            display_name = format_folder_name(info["folder"])
+            self.folder_display_map[display_name] = info["folder"]
             self.exp_list.addItem(display_name)
 
     def display_experiment_data(self, item):
@@ -302,7 +330,7 @@ class WickingDashboard(QMainWindow):
         else:
             self.ax.text(0.5, 0.5, "No CSV data found", transform=self.ax.transAxes,
                          ha='center', va='center', fontsize=12, color='red')
-        # Force fresh plot rendering based on current plot mode
+
         self.plot_selected_experiments()
         self.plot_area.draw()
 
@@ -310,39 +338,36 @@ class WickingDashboard(QMainWindow):
             try:
                 with open(json_path, 'r') as f:
                     meta = json.load(f)
-                pretty = json.dumps(meta, indent=2)
-                self.meta_view.setText(pretty)
+                self.meta_view.setText(json.dumps(meta, indent=2))
             except Exception as e:
                 self.meta_view.setText(f"Failed to load metadata: {e}")
         else:
             self.meta_view.setText("No metadata found.")
 
     def plot_selected_experiments(self):
+        if not hasattr(self, "ax"):
+            return  # Skip if ax isn't ready
         self.ax.clear()
-
-        # Ensure plot_mode is always synced to radio button
         self.plot_mode = "height" if self.height_radio.isChecked() else "wicking"
-
         selected_items = self.exp_list.selectedItems()
         if not selected_items:
             self.ax.text(0.5, 0.5, "No experiments selected", transform=self.ax.transAxes,
-                        ha='center', va='center', fontsize=12, color='gray')
+                         ha='center', va='center', fontsize=12, color='gray')
             self.plot_area.draw()
             return
 
         for item in selected_items:
-            full_display_name = item.text()
-            plot_name = full_display_name.split("–")[0].strip()
-            folder_name = self.folder_display_map[full_display_name]
+            display_name = item.text()
+            folder_name = self.folder_display_map[display_name]
             folder = os.path.join(self.output_dir, folder_name)
             csv_path = os.path.join(folder, "data.csv")
             if os.path.exists(csv_path):
                 try:
                     df = pd.read_csv(csv_path)
                     if self.plot_mode == "height":
-                        self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], label=plot_name)
+                        self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], label=folder_name)
                     elif self.plot_mode == "wicking":
-                        self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], label=plot_name)
+                        self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], label=folder_name)
                 except Exception as e:
                     print(f"Error reading {folder_name}: {e}")
 
