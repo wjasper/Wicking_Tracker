@@ -24,7 +24,7 @@ def main():
     width = 640
     height = 480
 
-    USE_DUMMY_CAMERA = True  # Set to False when real camera is present
+    USE_DUMMY_CAMERA = False  # Set to False when real camera is present
 
     if USE_DUMMY_CAMERA:
         class DummyCamera:
@@ -78,7 +78,7 @@ def main():
         return
 
     df, plot_image = sliding_window(
-        cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color
+        cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color, update_status_func=self.update_live_status
     )
 
 if __name__ == "__main__":
