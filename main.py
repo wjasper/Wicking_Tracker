@@ -9,26 +9,48 @@ import platform
 import sys
 
 def main():
-    from picamera2 import Picamera2
-    from calibration import calibration, base_color
-    from sliding_window import sliding_window
-    from save_data import save_data
-    
-    # Set camera properties
-    framerate = 30  # Reduced for better interactivity
-    width = 640     # Width of video frame
-    height = 480    # Height of video frame
+    from processing_modules.calibration import calibration, base_color
+    from processing_modules.sliding_window import sliding_window
+    from processing_modules.save_data import SaveDialog
 
-    # Initialize the PiCamera2
-    cam = Picamera2()
-    main = {"size": (width, height), "format": "RGB888"}
-    controls = {"FrameRate": framerate}
-    sensor = {"bit_depth": 15, "output_size": (2028, 1520)}
-    video_config = cam.create_video_configuration(
-        main, controls=controls, sensor=sensor
-    )
-    cam.configure(video_config)
+    from PyQt5.QtWidgets import QApplication, QMessageBox
+    if not QApplication.instance():
+        app = QApplication([]) 
     
+    import numpy as np
+
+    # Set camera properties
+    framerate = 30
+    width = 640
+    height = 480
+
+    USE_DUMMY_CAMERA = False  # Set to False when real camera is present
+
+    if USE_DUMMY_CAMERA:
+        class DummyCamera:
+            def start(self):
+                print("[INFO] Dummy camera started")
+
+            def stop(self):
+                print("[INFO] Dummy camera stopped")
+
+            def capture_array(self):
+                return np.zeros((height, width, 3), dtype=np.uint8)
+
+        cam = DummyCamera()
+
+    else:
+        from picamera2 import Picamera2
+        cam = Picamera2()
+
+        main_config = {"size": (width, height), "format": "RGB888"}
+        controls = {"FrameRate": framerate}
+        sensor = {"bit_depth": 15, "output_size": (2028, 1520)}
+        video_config = cam.create_video_configuration(
+            main_config, controls=controls, sensor=sensor
+        )
+        cam.configure(video_config)
+
     cam.start()
     print("Starting calibration...")
 
@@ -39,25 +61,29 @@ def main():
         return
 
     bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel = result
-    
-    
     average_base_color = base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h)
     print("Calibration complete.")
-    
-    start_input = input("Enter y to start wicking tracker: ")
-    if start_input.strip().lower() != "y":
+
+    start_reply = QMessageBox.question(
+        None,
+        "Start Tracker",
+        "Start wicking tracker?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes
+    )
+
+    if start_reply != QMessageBox.Yes:
         print("Aborted tracker.")
         cam.stop()
         return
 
-    sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color)
-
-    cam.stop()
-    print("Program completed successfully")
+    df, plot_image = sliding_window(
+        cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color, update_status_func=self.update_live_status
+    )
 
 if __name__ == "__main__":
     if platform.system() == "Linux":
-        sys.path.append('/home/pi/opencv/Wicking_Tracker/processing_modules')
+        sys.path.append('/home/pi/opencv/Wicking_Tracker/processing_modules')  # adjust as needed
         main()
     else:
         print("OS not compatible")

@@ -3,18 +3,22 @@ import datetime
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import matplotlib
+matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
 import io
 from PIL import Image
-from post_processing_plots import post_process_wicking_rate
-from save_data import save_data
+from .post_processing_plots import post_process_wicking_rate
+from .save_data import SaveDialog
+
+from PyQt5.QtWidgets import QMessageBox
 
 def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
 
 
-def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color):
+def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color,update_status_func=None):
     df, height_plot_image = None, None,
     area_of_interest_offset = 0
     height = 0
@@ -87,6 +91,8 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         avg_rate = height / delta_time if delta_time > 0 else 0
         df.loc[len(df)] = [delta_time, height, 0, avg_rate] 
 
+        if update_status_func:
+            update_status_func(delta_time, delta_E_mean, height, avg_rate, current_delta_threshold)
         # Print live values
         print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Delta Threshold: {current_delta_threshold:.2f} mm")
 
@@ -132,8 +138,16 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
 
     df, height_plot_image, wicking_plot_image = post_process_wicking_rate(df)
 
-    save_input = input("Enter y to save data: ")
-    if save_input.strip().lower() == "y":
-        csv_path = save_data(df, height_plot_image, wicking_plot_image)
+    save_reply = QMessageBox.question(
+        None,
+        "Save Experiment",
+        "Do you want to save the experiment?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes
+    )
+
+    if save_reply == QMessageBox.Yes:
+        dlg = SaveDialog(df, height_plot_image, wicking_plot_image)
+        dlg.exec_()
     
     return df, height_plot_image
