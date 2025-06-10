@@ -78,8 +78,7 @@ def main():
         return
 
     df, plot_image = sliding_window(
-        cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color, update_status_func=self.update_live_status
-    )
+        cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color)
 
 if __name__ == "__main__":
     if platform.system() == "Linux":
