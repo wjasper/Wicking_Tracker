@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
     QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame,
     QLineEdit, QInputDialog, QSplitter, QRadioButton, QButtonGroup, QCheckBox,
-    QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit
+    QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit, 
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure

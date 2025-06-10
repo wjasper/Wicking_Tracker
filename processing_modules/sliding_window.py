@@ -18,7 +18,7 @@ def calculate_delta(base_color, sliding_window_color):
     return np.linalg.norm(base_color - sliding_window_color)
 
 
-def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color):
+def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color,update_status_func=None):
     df, height_plot_image = None, None,
     area_of_interest_offset = 0
     height = 0
@@ -91,6 +91,8 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         avg_rate = height / delta_time if delta_time > 0 else 0
         df.loc[len(df)] = [delta_time, height, 0, avg_rate] 
 
+        if update_status_func:
+            update_status_func(delta_time, delta_E_mean, height, avg_rate, current_delta_threshold)
         # Print live values
         print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Delta Threshold: {current_delta_threshold:.2f} mm")
 
