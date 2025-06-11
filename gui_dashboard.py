@@ -372,8 +372,8 @@ class WickingDashboard(QMainWindow):
                     print(f"Error reading {folder_name}: {e}")
 
         self.ax.set_title("Height vs Time" if self.plot_mode == "height" else "Wicking Rate")
-        self.ax.set_xlabel("Time")
-        self.ax.set_ylabel("Height" if self.plot_mode == "height" else "Wicking Rate")
+        self.ax.set_xlabel("Time (s)")
+        self.ax.set_ylabel("Height (mm)" if self.plot_mode == "height" else "Wicking Rate (mm/s)")
         self.ax.legend()
         self.ax.grid(True, linestyle='--', alpha=0.5)
         self.plot_area.draw()
