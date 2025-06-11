@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Mar 13 14:20:15 2025
+@author: Dr. Warren Jasper and Shivam Ghodke
+"""
 import sys
 import os
 import json
@@ -10,6 +16,7 @@ from PyQt5.QtWidgets import (
     QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit, 
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 import subprocess
 import threading
@@ -86,7 +93,7 @@ class WickingDashboard(QMainWindow):
                 }
             """)
             btn.setFixedWidth(180)
-
+        
         self.btn_start.clicked.connect(self.show_start_view)
         self.btn_view.clicked.connect(self.show_experiment_view)
 
@@ -196,8 +203,12 @@ class WickingDashboard(QMainWindow):
 
         self.plot_area = FigureCanvas(Figure(figsize=(5, 4)))
         self.ax = self.plot_area.figure.add_subplot(111)
+        self.toolbar = NavigationToolbar(self.plot_area, self)
 
         plot_container = QVBoxLayout()
+        plot_container.setContentsMargins(10, 0, 0, 0)  # Move toolbar slightly
+        plot_container.setSpacing(5)
+        plot_container.addWidget(self.toolbar)        # 👈 Add toolbar
         plot_container.addLayout(radio_layout)
         plot_container.addWidget(self.plot_area)
 
@@ -274,7 +285,7 @@ class WickingDashboard(QMainWindow):
                     self.exp_info.append({"folder": folder, "type": exp_type, "datetime": dt})
                 except:
                     continue
-
+        
         types = sorted(set(info["type"] for info in self.exp_info))
         self.type_filter_dropdown.blockSignals(True)
         self.type_filter_dropdown.clear()
