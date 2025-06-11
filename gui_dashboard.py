@@ -269,7 +269,7 @@ class WickingDashboard(QMainWindow):
                     if len(parts) != 3:
                         continue
                     name_tokens = parts[0].split()
-                    exp_type = " ".join(name_tokens[:2]) if len(name_tokens) >= 2 else parts[0]
+                    exp_type = " ".join(name_tokens[:2]).title() if len(name_tokens) >= 2 else parts[0]
                     dt = datetime.strptime(parts[1] + "_" + parts[2], "%Y%m%d_%H%M%S")
                     self.exp_info.append({"folder": folder, "type": exp_type, "datetime": dt})
                 except:
@@ -290,7 +290,7 @@ class WickingDashboard(QMainWindow):
 
         filtered = [
             info for info in self.exp_info
-            if (selected_type == "All Types" or info["type"] == selected_type)
+            if (selected_type.lower() == "all types" or info["type"].lower() == selected_type.lower())
             and (search_text in info["folder"].lower())
         ]
 
@@ -308,32 +308,11 @@ class WickingDashboard(QMainWindow):
         csv_path = os.path.join(folder, "data.csv")
         json_path = os.path.join(folder, "metadata.json")
 
-        self.ax.clear()
-        if os.path.exists(csv_path):
-            try:
-                df = pd.read_csv(csv_path)
-                if self.plot_mode == "height" and 'Time_Uniform' in df.columns and 'Filtered Height (Raw)' in df.columns:
-                    self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], linestyle='-')
-                    self.ax.set_title(f"{folder_name} - Height vs Time")
-                    self.ax.set_ylabel("Height (mm)")
-                elif self.plot_mode == "wicking" and 'Time_Uniform' in df.columns and 'Wicking Rate Filtered (Spline)' in df.columns:
-                    self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], linestyle='-', color='red')
-                    self.ax.set_title(f"{folder_name} - Wicking Rate")
-                    self.ax.set_ylabel("Wicking Rate (mm/s)")
-                else:
-                    self.ax.text(0.5, 0.5, "Required columns missing", transform=self.ax.transAxes,
-                                 ha='center', va='center', fontsize=12, color='red')
-                self.ax.set_xlabel("Time")
-            except Exception as e:
-                self.ax.text(0.5, 0.5, f"Failed to load plot:\n{e}", transform=self.ax.transAxes,
-                             ha='center', va='center', fontsize=10, color='red')
-        else:
-            self.ax.text(0.5, 0.5, "No CSV data found", transform=self.ax.transAxes,
-                         ha='center', va='center', fontsize=12, color='red')
-
+        # Only call this:
         self.plot_selected_experiments()
-        self.plot_area.draw()
 
+        # No need to replot again manually here
+        # Just draw the metadata section:
         if os.path.exists(json_path):
             try:
                 with open(json_path, 'r') as f:
