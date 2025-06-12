@@ -68,8 +68,6 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             print(f"Delta greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
             area_of_interest_offset -= 2
 
-            height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) -1
-
         elif height >= height_in_mm:
             area_of_interest_offset = 0
 
@@ -80,11 +78,11 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             last_height_update_time = now
             last_height_value = height
 
-        # [ADDED] Reduce threshold if no height change for 20 seconds
-        if (now - last_height_update_time).total_seconds() > 20:
-            new_threshold = current_delta_threshold * 0.95
-            current_delta_threshold = max(new_threshold, 5)
-            print(f"[INFO] No height change in 30s. Reducing delta threshold to {current_delta_threshold:.2f}")
+        # [ADDED] Reduce threshold if no height change for 15 seconds
+        if (now - last_height_update_time).total_seconds() > 15:
+            new_threshold = delta_E_mean * 1.1
+            current_delta_threshold = max(new_threshold, 21)
+            print(f"[INFO] No height change in 15s. Reducing delta threshold to {current_delta_threshold:.2f}")
             last_height_update_time = now  # reset timer
 
         # Update data for Average height
