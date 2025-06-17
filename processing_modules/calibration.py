@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QInputDialog
+from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 class BoundingBox:
     def __init__(self, x=240, y=18, w=132, h=391):
@@ -231,7 +231,7 @@ def base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h):
     cv2.namedWindow("Getting average over 500 frames")
     base_colors = []
 
-    print("Calibrating wicking, this may take a while ...")
+    print("STATUS: Calibrating wicking, this may take a while ...", flush=True)
     for _ in range(500):  # Loop to capture the color 500 times
         frame = cam.capture_array()
         if frame is None:

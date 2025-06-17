@@ -24,7 +24,7 @@ def main():
     width = 640
     height = 480
 
-    USE_DUMMY_CAMERA = False  # Set to False when real camera is present
+    USE_DUMMY_CAMERA = True  # Set to False when real camera is present
 
     if USE_DUMMY_CAMERA:
         class DummyCamera:
@@ -52,17 +52,17 @@ def main():
         cam.configure(video_config)
 
     cam.start()
-    print("Starting calibration...")
+    print("STATUS: Calibration started", flush=True)
 
     result = calibration(cam, height, width)
     if result is None:
-        print("Calibration was cancelled.")
+        print("STATUS: Calibration cancelled", flush=True)
         cam.stop()
         return
 
     bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel = result
     average_base_color = base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h)
-    print("Calibration complete.")
+    print("STATUS: Calibration complete", flush=True)
 
     start_reply = QMessageBox.question(
         None,
@@ -76,6 +76,8 @@ def main():
         print("Aborted tracker.")
         cam.stop()
         return
+    
+    print("STATUS: Wicking tracker started", flush=True)
 
     df, plot_image = sliding_window(
         cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color)
@@ -83,6 +85,9 @@ def main():
 if __name__ == "__main__":
     if platform.system() == "Linux":
         sys.path.append('/home/pi/opencv/Wicking_Tracker/processing_modules')  # adjust as needed
+        main()
+    elif platform.system() == "Windows":
+        sys.path.append(r'C:/Users/otandel/Downloads/Codes/Wicking/Wicking_Tracker/processing_modules')
         main()
     else:
         print("OS not compatible")

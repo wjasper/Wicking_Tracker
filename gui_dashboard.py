@@ -8,12 +8,12 @@ import sys
 import os
 import json
 import pandas as pd
-from PyQt5.QtCore import QTimer, Qt, QDate
+from PyQt5.QtCore import QTimer, Qt, QDate, QMetaObject, Q_ARG, pyqtSlot
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
     QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame,
     QLineEdit, QInputDialog, QSplitter, QRadioButton, QButtonGroup, QCheckBox,
-    QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit, 
+    QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit, QGridLayout
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
@@ -22,6 +22,7 @@ import subprocess
 import threading
 from datetime import datetime
 import pytz
+
 
 def format_folder_name(folder_name):
     try:
@@ -38,6 +39,7 @@ def format_folder_name(folder_name):
         return folder_name
 
 class WickingDashboard(QMainWindow):
+
     def __init__(self, output_dir):
         super().__init__()
         self.setWindowTitle("Wicking Tracker Dashboard")
@@ -48,18 +50,26 @@ class WickingDashboard(QMainWindow):
                 font-family: Segoe UI, sans-serif;
                 font-size: 14px;
             }
+
+            QFrame, #MainCard, #PlotPanel, #MetaPanel {
+                background-color: #f9fafe;
+                border: 1px solid #ffffff;
+                border-radius: 10px;
+            }
+
             QListWidget, QTextEdit {
                 border: 1px solid #ccc;
                 border-radius: 6px;
                 background-color: white;
             }
+                           
         """)
 
         self.output_dir = output_dir
         self.plot_mode = "height"
 
         self.sidebar_frame = QFrame()
-        self.sidebar_frame.setStyleSheet("background-color: #ffffff;")
+        self.sidebar_frame.setStyleSheet("background-color: #f9fafe;")
         self.sidebar_frame.setFixedWidth(200)
 
         self.toggle_btn = QPushButton("☰")
@@ -105,6 +115,10 @@ class WickingDashboard(QMainWindow):
         sidebar_layout.addStretch()
         self.sidebar_frame.setLayout(sidebar_layout)
 
+
+        self.status_label = QLabel("🟢 Idle")
+        self.status_label.setStyleSheet("color: #2ecc71; font-weight: bold;")
+        
         self.stack = QStackedWidget()
         self.init_start_view()
         self.init_experiment_view()
@@ -114,8 +128,10 @@ class WickingDashboard(QMainWindow):
         self.main_layout.addWidget(self.stack)
 
         self.header_bar = QHBoxLayout()
+
         self.header_bar.addWidget(self.toggle_btn)
         self.header_bar.addStretch()
+
 
         main_container = QVBoxLayout()
         main_container.addLayout(self.header_bar)
@@ -125,19 +141,66 @@ class WickingDashboard(QMainWindow):
         container.setLayout(main_container)
         self.setCentralWidget(container)
 
-        self.show_start_view()
-        self.status_window = QTextEdit()
-        self.status_window.setWindowTitle("Live Status")
-        self.status_window.setReadOnly(True)
-        self.status_window.resize(400, 200)
+    @pyqtSlot(str, str)
+    def update_status(self, message, color="green"):
+        print(f"[UPDATE_STATUS] {message} ({color})")
+        icons = {
+            "green": "🟢",
+            "blue": "⚙️",
+            "red": "⛔",
+            "orange": "📸",
+            "gray": "⏹️",
+        }
+        icon = icons.get(color, "ℹ️")
+        self.status_label.setText(f"{icon} {message}")
+        self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+
+    def extract_summary_from_output(self, full_text):
+        summary = ""
+        minutes = [1, 5, 10]
+        for min_val in minutes:
+            target_time = min_val * 60
+            closest_height = None
+            min_diff = float("inf")
+            for line in full_text.splitlines():
+                if line.startswith("Time:") and "Height:" in line:
+                    try:
+                        time_str = line.split("Time:")[1].split("s")[0].strip()
+                        height_str = line.split("Height:")[1].split("mm")[0].strip()
+                        time_val = float(time_str)
+                        height_val = float(height_str)
+                        if abs(time_val - target_time) < min_diff:
+                            min_diff = abs(time_val - target_time)
+                            closest_height = height_val
+                    except:
+                        continue
+            if closest_height:
+                summary += f"{min_val} min height: {closest_height} mm\n"
+            else:
+                summary += f"{min_val} min height: Not Available\n"
+        return summary
 
     def toggle_sidebar(self):
         self.sidebar_frame.setVisible(not self.sidebar_frame.isVisible())
 
     def init_start_view(self):
         start_widget = QWidget()
-        layout = QVBoxLayout()
+        outer_layout = QVBoxLayout()
 
+        # --- Add Title ---
+        heading_label = QLabel("Welcome to Wicking Tracker")
+        heading_label.setAlignment(Qt.AlignCenter)
+        heading_label.setStyleSheet("""
+            font-size: 36px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            color: #2c3e50;
+            margin-top: 10px;
+        """)
+        outer_layout.addWidget(heading_label)
+
+        # --- Button + Status Row ---
+        button_row = QHBoxLayout()
         self.start_button = QPushButton("▶ Start Wicking")
         self.start_button.setFixedWidth(200)
         self.start_button.setStyleSheet("""
@@ -154,16 +217,88 @@ class WickingDashboard(QMainWindow):
         """)
         self.start_button.clicked.connect(self.handle_start_wicking)
 
-        layout.addStretch()
-        layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addStretch()
-        start_widget.setLayout(layout)
+        self.status_label = QLabel("🟢 Idle")
+        self.status_label.setStyleSheet("color: #2ecc71; font-weight: bold; padding-right: 10px;")
+
+        button_row.addWidget(self.start_button, alignment=Qt.AlignLeft)
+        button_row.addStretch()
+        button_row.addWidget(self.status_label, alignment=Qt.AlignRight)
+        outer_layout.addLayout(button_row)
+
+        # === Live Statistics Grid ===
+        self.stat_labels = {}
+        stat_grid = QGridLayout()
+        stat_grid.setVerticalSpacing(8)
+        for i, label_text in enumerate(["Time", "Delta E", "Height", "Wicking Rate"]):
+            label = QLabel(f"{label_text}:")
+            value = QLabel("...")
+            value.setStyleSheet("font-weight: bold; color: #34495e;")
+            self.stat_labels[label_text] = value
+            stat_grid.addWidget(label, i, 0)
+            stat_grid.addWidget(value, i, 1)
+
+        stat_widget = QWidget()
+        stat_widget.setLayout(stat_grid)
+
+        # === Live Output Text Box (with titled frame) ===
+        self.live_output_box = QTextEdit()
+        self.live_output_box.setReadOnly(True)
+        self.live_output_box.setStyleSheet("""
+            QTextEdit {
+                background-color: #ffffff;
+                border: none;
+                border-radius: 8px;
+                padding: 8px;
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+                color: #2c3e50;
+            }
+        """)
+        self.live_output_box.setPlaceholderText("📊 Summary will appear here after the experiment...")
+        self.live_output_box.setFixedHeight(160)
+
+        # Frame to hold the summary title and box
+        self.summary_frame = QFrame()
+        self.summary_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f9fafe;
+                border: 1px solid #dcdcdc;
+                border-radius: 12px;
+                padding: 10px;
+            }
+        """)
+
+        summary_layout = QVBoxLayout()
+        summary_title = QLabel("📊 Summary")
+        summary_title.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: 600;
+                color: #34495e;
+                margin-bottom: 4px;
+            }
+        """)
+        summary_layout.addWidget(summary_title)
+        summary_layout.addWidget(self.live_output_box)
+        self.summary_frame.setLayout(summary_layout)
+
+        # === Put Stats + Output in Split Layout ===
+        bottom_row = QHBoxLayout()
+        bottom_row.addWidget(stat_widget, stretch=1)
+        bottom_row.addWidget(self.summary_frame, stretch=2)
+        outer_layout.addLayout(bottom_row)
+
+        outer_layout.addStretch()
+
+        start_widget.setLayout(outer_layout)
         self.stack.addWidget(start_widget)
+        self.show_start_view()
 
     def init_experiment_view(self):
         view_widget = QWidget()
         outer_layout = QVBoxLayout()
 
+        # === LEFT PANEL ===
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("🔍 Search experiments...")
         self.search_bar.textChanged.connect(self.apply_filters)
@@ -178,6 +313,18 @@ class WickingDashboard(QMainWindow):
         self.plot_selected_button = QPushButton("📈 Plot Selected")
         self.plot_selected_button.clicked.connect(self.plot_selected_experiments)
 
+        left_panel = QVBoxLayout()
+        left_panel.addWidget(self.search_bar)
+        left_panel.addWidget(self.exp_list)
+        left_panel.addWidget(self.multi_select_checkbox)
+        left_panel.addWidget(self.plot_selected_button)
+        left_panel.addStretch()
+
+        left_widget = QWidget()
+        left_widget.setObjectName("LeftPanel")
+        left_widget.setLayout(left_panel)
+
+        # === CENTER PLOT PANEL ===
         self.height_radio = QRadioButton("Height")
         self.wicking_radio = QRadioButton("Wicking Rate")
 
@@ -191,30 +338,22 @@ class WickingDashboard(QMainWindow):
         radio_layout = QHBoxLayout()
         radio_layout.addWidget(self.height_radio)
         radio_layout.addWidget(self.wicking_radio)
-
-        left_panel = QVBoxLayout()
-        left_panel.addWidget(self.search_bar)
-        left_panel.addWidget(self.exp_list)
-        left_panel.addWidget(self.multi_select_checkbox)
-        left_panel.addWidget(self.plot_selected_button)
-
-        left_widget = QWidget()
-        left_widget.setLayout(left_panel)
+        radio_layout.addStretch()
 
         self.plot_area = FigureCanvas(Figure(figsize=(5, 4)))
         self.ax = self.plot_area.figure.add_subplot(111)
         self.toolbar = NavigationToolbar(self.plot_area, self)
 
         plot_container = QVBoxLayout()
-        plot_container.setContentsMargins(10, 0, 0, 0)  # Move toolbar slightly
-        plot_container.setSpacing(5)
-        plot_container.addWidget(self.toolbar)        # 👈 Add toolbar
+        plot_container.addWidget(self.toolbar)
         plot_container.addLayout(radio_layout)
         plot_container.addWidget(self.plot_area)
 
         plot_widget = QWidget()
+        plot_widget.setObjectName("PlotPanel")
         plot_widget.setLayout(plot_container)
 
+        # === RIGHT PANEL (Metadata) ===
         self.meta_view = QTextEdit()
         self.meta_view.setReadOnly(True)
 
@@ -226,11 +365,14 @@ class WickingDashboard(QMainWindow):
         right_panel.addWidget(self.type_filter_label)
         right_panel.addWidget(self.type_filter_dropdown)
         right_panel.addWidget(self.meta_view)
+        right_panel.addStretch()
 
         right_widget = QWidget()
+        right_widget.setObjectName("RightPanel")
         right_widget.setLayout(right_panel)
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        # === COMBINE PANELS ===
+        splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(left_widget)
         splitter.addWidget(plot_widget)
         splitter.addWidget(right_widget)
@@ -258,14 +400,82 @@ class WickingDashboard(QMainWindow):
 
     def handle_start_wicking(self):
         def run_main_py():
+            # Immediately notify status before launching subprocess
+            QMetaObject.invokeMethod(
+                self, "update_status", Qt.QueuedConnection,
+                Q_ARG(str, "Running main.py"),
+                Q_ARG(str, "blue")
+            )
+            
             try:
-                subprocess.run(["python", "main.py"], check=True)
+                proc = subprocess.Popen(
+                    [sys.executable, "-u", "main.py"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+
+                for line in iter(proc.stdout.readline, ""):
+                    line = line.strip()
+
+                    if line.startswith("STATUS:"):
+                        message = line.split("STATUS:")[1].strip()
+                        QMetaObject.invokeMethod(
+                            self, "update_status", Qt.QueuedConnection,
+                            Q_ARG(str, message),
+                            Q_ARG(str, "blue")
+                        )
+
+                    elif "Time:" in line and "Height:" in line:
+                        # parse live values
+                        try:
+                            time_val = line.split("Time:")[1].split("s")[0].strip()
+                            delta_e = line.split("Delta E:")[1].split("|")[0].strip()
+                            height = line.split("Height:")[1].split("mm")[0].strip()
+                            threshold = line.split("Delta Threshold:")[1].strip()
+
+                            QMetaObject.invokeMethod(self.stat_labels["Time"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{time_val} s"))
+                            QMetaObject.invokeMethod(self.stat_labels["Delta E"], "setText", Qt.QueuedConnection, Q_ARG(str, delta_e))
+                            QMetaObject.invokeMethod(self.stat_labels["Height"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{height} mm"))
+                        except Exception as e:
+                            print("Error parsing time line:", e)
+
+                    elif "Avg Wicking Rate:" in line:
+                        try:
+                            rate_val = line.split(":")[1].strip()
+                            QMetaObject.invokeMethod(self.stat_labels["Wicking Rate"], "setText", Qt.QueuedConnection, Q_ARG(str, rate_val))
+                        except Exception as e:
+                            print("Error parsing rate line:", e)
+
+                proc.stdout.close()
+                proc.wait()
+
+                summary = self.extract_summary_from_output(self.live_output_box.toPlainText())
+                QMetaObject.invokeMethod(
+                    self.live_output_box,
+                    "append",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, "\n===== SUMMARY =====\n" + summary)
+                )
+
+                QMetaObject.invokeMethod(
+                    self, "update_status", Qt.QueuedConnection,
+                    Q_ARG(str, "Experiment complete"),
+                    Q_ARG(str, "green")
+                )
                 QTimer.singleShot(0, lambda: self.show_message(self, "Done", "Wicking tracking completed."))
+
             except subprocess.CalledProcessError:
+                QMetaObject.invokeMethod(
+                    self, "update_status", Qt.QueuedConnection,
+                    Q_ARG(str, "Error running experiment"),
+                    Q_ARG(str, "red")
+                )
                 QTimer.singleShot(0, lambda: self.show_message(self, "Error", "main.py failed to run."))
 
         threading.Thread(target=run_main_py, daemon=True).start()
         QMessageBox.information(self, "Started", "Wicking tracker started.")
+
 
     def refresh_experiment_list(self):
         self.exp_info = []
