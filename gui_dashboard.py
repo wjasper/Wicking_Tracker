@@ -229,7 +229,7 @@ class WickingDashboard(QMainWindow):
         self.stat_labels = {}
         stat_grid = QGridLayout()
         stat_grid.setVerticalSpacing(8)
-        for i, label_text in enumerate(["Time", "Delta E", "Height", "Wicking Rate"]):
+        for i, label_text in enumerate(["Time", "Delta E", "Delta Threshold", "Height", "Wicking Rate"]):
             label = QLabel(f"{label_text}:")
             value = QLabel("...")
             value.setStyleSheet("font-weight: bold; color: #34495e;")
@@ -437,6 +437,7 @@ class WickingDashboard(QMainWindow):
                             QMetaObject.invokeMethod(self.stat_labels["Time"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{time_val} s"))
                             QMetaObject.invokeMethod(self.stat_labels["Delta E"], "setText", Qt.QueuedConnection, Q_ARG(str, delta_e))
                             QMetaObject.invokeMethod(self.stat_labels["Height"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{height} mm"))
+                            QMetaObject.invokeMethod(self.stat_labels["Delta Threshold"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{threshold}"))
                         except Exception as e:
                             print("Error parsing time line:", e)
 
