@@ -228,7 +228,7 @@ def calibration(cam, height, width):
 
 
 def base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h):
-    cv2.namedWindow("Getting average over 500 frames")
+    # cv2.namedWindow("Getting average over 500 frames")
     base_colors = []
 
     print("STATUS: Calibrating wicking, this may take a while ...", flush=True)
