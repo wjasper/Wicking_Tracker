@@ -318,7 +318,6 @@ class WickingDashboard(QMainWindow):
         left_panel.addWidget(self.exp_list)
         left_panel.addWidget(self.multi_select_checkbox)
         left_panel.addWidget(self.plot_selected_button)
-        left_panel.addStretch()
 
         left_widget = QWidget()
         left_widget.setObjectName("LeftPanel")
@@ -338,7 +337,6 @@ class WickingDashboard(QMainWindow):
         radio_layout = QHBoxLayout()
         radio_layout.addWidget(self.height_radio)
         radio_layout.addWidget(self.wicking_radio)
-        radio_layout.addStretch()
 
         self.plot_area = FigureCanvas(Figure(figsize=(5, 4)))
         self.ax = self.plot_area.figure.add_subplot(111)
