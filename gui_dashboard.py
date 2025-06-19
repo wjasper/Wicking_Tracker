@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """
 Created on Thu Mar 13 14:20:15 2025
 @author: Dr. Warren Jasper and Shivam Ghodke
@@ -338,6 +339,7 @@ class WickingDashboard(QMainWindow):
         radio_layout.addWidget(self.height_radio)
         radio_layout.addWidget(self.wicking_radio)
 
+
         self.plot_area = FigureCanvas(Figure(figsize=(5, 4)))
         self.ax = self.plot_area.figure.add_subplot(111)
         self.toolbar = NavigationToolbar(self.plot_area, self)
@@ -401,7 +403,7 @@ class WickingDashboard(QMainWindow):
             # Immediately notify status before launching subprocess
             QMetaObject.invokeMethod(
                 self, "update_status", Qt.QueuedConnection,
-                Q_ARG(str, "Running main.py"),
+                Q_ARG(str, "Starting Wicking Tracker"),
                 Q_ARG(str, "blue")
             )
             
@@ -430,21 +432,17 @@ class WickingDashboard(QMainWindow):
                             time_val = line.split("Time:")[1].split("s")[0].strip()
                             delta_e = line.split("Delta E:")[1].split("|")[0].strip()
                             height = line.split("Height:")[1].split("mm")[0].strip()
-                            threshold = line.split("Delta Threshold:")[1].strip()
+                            threshold = line.split("Delta Threshold:")[1].split("mm")[0].strip()
+                            rate = line.split("Wicking Rate:")[1].split("mm")[0].strip()
+                            
 
                             QMetaObject.invokeMethod(self.stat_labels["Time"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{time_val} s"))
                             QMetaObject.invokeMethod(self.stat_labels["Delta E"], "setText", Qt.QueuedConnection, Q_ARG(str, delta_e))
                             QMetaObject.invokeMethod(self.stat_labels["Height"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{height} mm"))
-                            QMetaObject.invokeMethod(self.stat_labels["Delta Threshold"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{threshold}"))
+                            QMetaObject.invokeMethod(self.stat_labels["Delta Threshold"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{threshold} mm"))
+                            QMetaObject.invokeMethod(self.stat_labels["Wicking Rate"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{rate} mm/s"))
                         except Exception as e:
                             print("Error parsing time line:", e)
-
-                    elif "Avg Wicking Rate:" in line:
-                        try:
-                            rate_val = line.split(":")[1].strip()
-                            QMetaObject.invokeMethod(self.stat_labels["Wicking Rate"], "setText", Qt.QueuedConnection, Q_ARG(str, rate_val))
-                        except Exception as e:
-                            print("Error parsing rate line:", e)
 
                 proc.stdout.close()
                 proc.wait()
@@ -473,7 +471,6 @@ class WickingDashboard(QMainWindow):
                 QTimer.singleShot(0, lambda: self.show_message(self, "Error", "main.py failed to run."))
 
         threading.Thread(target=run_main_py, daemon=True).start()
-        QMessageBox.information(self, "Started", "Wicking tracker started.")
 
 
     def refresh_experiment_list(self):
@@ -553,6 +550,8 @@ class WickingDashboard(QMainWindow):
             self.ax.text(0.5, 0.5, "No experiments selected", transform=self.ax.transAxes,
                          ha='center', va='center', fontsize=12, color='gray')
             self.plot_area.draw()
+            self.plot_area.repaint()   # 👈 Force repaint
+            self.plot_area.update()  
             return
 
         for item in selected_items:
@@ -576,6 +575,8 @@ class WickingDashboard(QMainWindow):
         self.ax.legend()
         self.ax.grid(True, linestyle='--', alpha=0.5)
         self.plot_area.draw()
+        self.plot_area.repaint()   # 👈 Force repaint
+        self.plot_area.update()  
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

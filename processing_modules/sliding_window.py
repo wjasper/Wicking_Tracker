@@ -10,6 +10,7 @@ import io
 from PIL import Image
 from .post_processing_plots import post_process_wicking_rate
 from .save_data import SaveDialog
+from scipy.interpolate import CubicSpline
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -85,6 +86,28 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             print(f"[INFO] No height change in 15s. Reducing delta threshold to {current_delta_threshold:.2f}")
             last_height_update_time = now  # reset timer
 
+        # Calculate wicking rate using cubic polynomial (sliding 4-point window)
+        if len(df) >= 4:
+            t_window = df["Time"].iloc[-4:].values
+            h_window = df["Height"].iloc[-4:].values
+
+            # Sort by time just in case
+            sort_idx = np.argsort(t_window)
+            t_window = t_window[sort_idx]
+            h_window = h_window[sort_idx]
+
+            # Fit cubic spline on the window
+            cs = CubicSpline(t_window, h_window)
+
+            # Create uniform time array within the range of t_window
+            t_uniform = np.linspace(t_window[0], t_window[-1], len(t_window))
+
+            # Derivative of the spline gives the rate
+            wicking_rate_deri = cs.derivative()(t_uniform)
+            wicking_rate = wicking_rate_deri[-1]
+        else:
+            wicking_rate = 0.0
+
         # Update data for Average height
         avg_rate = height / delta_time if delta_time > 0 else 0
         df.loc[len(df)] = [delta_time, height, 0, avg_rate] 
@@ -92,7 +115,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         if update_status_func:
             update_status_func(delta_time, delta_E_mean, height, avg_rate, current_delta_threshold)
         # Print live values
-        print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Delta Threshold: {current_delta_threshold:.2f} mm")
+        print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Delta Threshold: {current_delta_threshold:.2f} mm | Wicking Rate: {wicking_rate:.2f} mm")
 
         if delta_time > 0:
             print(f"Avg Wicking Rate: {height/delta_time:.4f} mm/s")
