@@ -159,7 +159,7 @@ class WickingDashboard(QMainWindow):
     def extract_summary_from_output(self, full_text):
         summary_heights = {}
         summary_rates = {}
-        minutes = [0.2, 0.3, 10]
+        minutes = [1, 5, 10]
 
         for min_val in minutes:
             target_time = min_val * 60
