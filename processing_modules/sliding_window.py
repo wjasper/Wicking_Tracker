@@ -25,7 +25,9 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     height = 0
 
 
-    cv2.namedWindow("Sliding Window")
+    # Before your main loop (only once)
+    cv2.namedWindow("Sliding Window", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Sliding Window", 620, 520)
 
     start_time = datetime.datetime.now()
     plot_time = start_time + datetime.timedelta(seconds=15)

@@ -157,29 +157,42 @@ class WickingDashboard(QMainWindow):
         self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
     def extract_summary_from_output(self, full_text):
-        summary = ""
-        minutes = [1, 5, 10]
+        summary_heights = {}
+        summary_rates = {}
+        minutes = [0.2, 0.3, 10]
+
         for min_val in minutes:
             target_time = min_val * 60
             closest_height = None
+            closest_rate = None
             min_diff = float("inf")
+
             for line in full_text.splitlines():
-                if line.startswith("Time:") and "Height:" in line:
+                if line.startswith("Time:") and "Height:" in line and "Wicking Rate:" in line:
                     try:
                         time_str = line.split("Time:")[1].split("s")[0].strip()
                         height_str = line.split("Height:")[1].split("mm")[0].strip()
+                        rate_str = line.split("Wicking Rate:")[1].split("mm")[0].strip()
+
                         time_val = float(time_str)
                         height_val = float(height_str)
-                        if abs(time_val - target_time) < min_diff:
+                        rate_val = float(rate_str)
+
+                        if time_val >= target_time and abs(time_val - target_time) < min_diff:
                             min_diff = abs(time_val - target_time)
                             closest_height = height_val
+                            closest_rate = rate_val
                     except:
                         continue
-            if closest_height:
-                summary += f"{min_val} min height: {closest_height} mm\n"
-            else:
-                summary += f"{min_val} min height: Not Available\n"
-        return summary
+
+            summary_heights[min_val] = f"{closest_height:.2f}" if closest_height is not None else "Not Available"
+            summary_rates[min_val] = f"{closest_rate:.2f}" if closest_rate is not None else "Not Available"
+
+        summary_lines = [
+            f"{min_val} min height: {summary_heights[min_val]} mm | Wicking Rate: {summary_rates[min_val]} mm/s"
+            for min_val in minutes
+        ]
+        return "\n".join(summary_lines)
 
     def toggle_sidebar(self):
         self.sidebar_frame.setVisible(not self.sidebar_frame.isVisible())
@@ -400,6 +413,7 @@ class WickingDashboard(QMainWindow):
 
     def handle_start_wicking(self):
         def run_main_py():
+            full_output_log = ""
             # Immediately notify status before launching subprocess
             QMetaObject.invokeMethod(
                 self, "update_status", Qt.QueuedConnection,
@@ -417,7 +431,7 @@ class WickingDashboard(QMainWindow):
 
                 for line in iter(proc.stdout.readline, ""):
                     line = line.strip()
-
+                    full_output_log += line + "\n"
                     if line.startswith("STATUS:"):
                         message = line.split("STATUS:")[1].strip()
                         QMetaObject.invokeMethod(
@@ -447,12 +461,12 @@ class WickingDashboard(QMainWindow):
                 proc.stdout.close()
                 proc.wait()
 
-                summary = self.extract_summary_from_output(self.live_output_box.toPlainText())
+                summary = self.extract_summary_from_output(full_output_log)
                 QMetaObject.invokeMethod(
                     self.live_output_box,
                     "append",
                     Qt.QueuedConnection,
-                    Q_ARG(str, "\n===== SUMMARY =====\n" + summary)
+                    Q_ARG(str, "\nSUMMARY\n" + summary)
                 )
 
                 QMetaObject.invokeMethod(
