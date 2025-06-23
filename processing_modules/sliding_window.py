@@ -64,7 +64,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         average_sliding_window_color = np.mean(sliding_color_LAB, axis=0)
         delta_E_mean = calculate_delta(average_base_color, average_sliding_window_color)
 
-        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) + 2
+        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) + 4
 
         # Adjust AOI
         if(delta_E_mean > current_delta_threshold):
