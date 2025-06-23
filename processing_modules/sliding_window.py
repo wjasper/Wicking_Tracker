@@ -45,6 +45,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     current_delta_threshold = original_delta_threshold
     last_height_update_time = start_time
     last_height_value = 0
+    deactive_15_second = False
 
     while True:
         sliding_color_LAB = []
@@ -62,31 +63,38 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
 
         average_sliding_window_color = np.mean(sliding_color_LAB, axis=0)
         delta_E_mean = calculate_delta(average_base_color, average_sliding_window_color)
-        
 
-        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) -3
+        height = mm_per_pixel * (bbox_y + bbox_h - area_of_interest_y2) + 2
 
         # Adjust AOI
-        if(delta_E_mean > current_delta_threshold and height < height_in_mm):
+        if(delta_E_mean > current_delta_threshold):
             print(f"Delta greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
             area_of_interest_offset -= 2
-
-        elif height >= height_in_mm:
-            area_of_interest_offset = 0
+            current_delta_threshold = min(delta_E_mean, original_delta_threshold)
+        
+        if height >= height_in_mm:
+            print("height greater than height of the bounding box", height)
+            # area_of_interest_offset = 0
 
         now = datetime.datetime.now()
 
         delta_time = (now - start_time).total_seconds()
-        if abs(height - last_height_value) > 0.1:
+        if abs(height - last_height_value) > 0.1: #AOI is moving up
             last_height_update_time = now
             last_height_value = height
+        else:
+            if (now - last_height_update_time).total_seconds() > 15:
+                new_threshold = delta_E_mean * 0.80
+                current_delta_threshold = min(original_delta_threshold, new_threshold)
+                print(f"[INFO] No height change in 15s. Reducing delta threshold to {current_delta_threshold:.2f}")
+                deactive_15_second = True
 
-        # [ADDED] Reduce threshold if no height change for 15 seconds
-        if (now - last_height_update_time).total_seconds() > 15:
-            new_threshold = delta_E_mean * 1.1
-            current_delta_threshold = max(new_threshold, 21)
-            print(f"[INFO] No height change in 15s. Reducing delta threshold to {current_delta_threshold:.2f}")
-            last_height_update_time = now  # reset timer
+            # [ADDED] Reduce threshold if no height change for 10 seconds
+            elif (now - last_height_update_time).total_seconds() > 10  and not deactive_15_second:
+                new_threshold = delta_E_mean * 1.1
+                current_delta_threshold = max(new_threshold, 21)
+                print(f"[INFO] No height change in 10s. Reducing delta threshold to {current_delta_threshold:.2f}")
+
 
         # Calculate wicking rate using cubic polynomial (sliding 4-point window)
         if len(df) >= 4:
@@ -116,7 +124,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
 
         if update_status_func:
             update_status_func(delta_time, delta_E_mean, height, avg_rate, current_delta_threshold)
-        # Print live values
+        # Prin t live values
         print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Delta Threshold: {current_delta_threshold:.2f} mm | Wicking Rate: {wicking_rate:.2f} mm")
 
         if delta_time > 0:

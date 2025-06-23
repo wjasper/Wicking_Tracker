@@ -218,7 +218,7 @@ def calibration(cam, height, width):
         except ValueError:
             QMessageBox.warning(None, "Invalid Input", "Please enter a valid integer.")
         
-    bbox.mm_per_pixel = 0.452127  
+    bbox.mm_per_pixel = 0.449735
     # height_in_mm = bbox.mm_per_pixel * bbox.h
 
     print("Hardcoded mm_per_pixel:", bbox.mm_per_pixel)
