@@ -157,41 +157,38 @@ class WickingDashboard(QMainWindow):
         self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
     def extract_summary_from_output(self, full_text):
-        summary_heights = {}
-        summary_rates = {}
+        summary_lines = []
         minutes = [1, 5, 10]
 
         for min_val in minutes:
             target_time = min_val * 60
+            closest_time = None
             closest_height = None
-            closest_rate = None
             min_diff = float("inf")
 
             for line in full_text.splitlines():
-                if line.startswith("Time:") and "Height:" in line and "Wicking Rate:" in line:
+                if line.startswith("Time:") and "Height:" in line:
                     try:
-                        time_str = line.split("Time:")[1].split("s")[0].strip()
-                        height_str = line.split("Height:")[1].split("mm")[0].strip()
-                        rate_str = line.split("Wicking Rate:")[1].split("mm")[0].strip()
-
-                        time_val = float(time_str)
-                        height_val = float(height_str)
-                        rate_val = float(rate_str)
+                        time_val = float(line.split("Time:")[1].split("s")[0].strip())
+                        height_val = float(line.split("Height:")[1].split("mm")[0].strip())
 
                         if time_val >= target_time and abs(time_val - target_time) < min_diff:
                             min_diff = abs(time_val - target_time)
+                            closest_time = time_val
                             closest_height = height_val
-                            closest_rate = rate_val
                     except:
                         continue
 
-            summary_heights[min_val] = f"{closest_height:.2f}" if closest_height is not None else "Not Available"
-            summary_rates[min_val] = f"{closest_rate:.2f}" if closest_rate is not None else "Not Available"
+            if closest_height is not None and closest_time and closest_time > 0:
+                avg_rate = closest_height / closest_time
+                summary_lines.append(
+                    f"{min_val} min height: {closest_height:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
+                )
+            else:
+                summary_lines.append(
+                    f"{min_val} min height: Not Available | Avg Rate: Not Available"
+                )
 
-        summary_lines = [
-            f"{min_val} min height: {summary_heights[min_val]} mm | Wicking Rate: {summary_rates[min_val]} mm/s"
-            for min_val in minutes
-        ]
         return "\n".join(summary_lines)
 
     def toggle_sidebar(self):
@@ -446,14 +443,14 @@ class WickingDashboard(QMainWindow):
                             time_val = line.split("Time:")[1].split("s")[0].strip()
                             delta_e = line.split("Delta E:")[1].split("|")[0].strip()
                             height = line.split("Height:")[1].split("mm")[0].strip()
-                            threshold = line.split("Delta Threshold:")[1].split("mm")[0].strip()
+                            threshold = line.split("Delta Threshold:")[1].split("|")[0].strip()
                             rate = line.split("Wicking Rate:")[1].split("mm")[0].strip()
                             
 
                             QMetaObject.invokeMethod(self.stat_labels["Time"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{time_val} s"))
                             QMetaObject.invokeMethod(self.stat_labels["Delta E"], "setText", Qt.QueuedConnection, Q_ARG(str, delta_e))
                             QMetaObject.invokeMethod(self.stat_labels["Height"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{height} mm"))
-                            QMetaObject.invokeMethod(self.stat_labels["Delta Threshold"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{threshold} mm"))
+                            QMetaObject.invokeMethod(self.stat_labels["Delta Threshold"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{threshold}"))
                             QMetaObject.invokeMethod(self.stat_labels["Wicking Rate"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{rate} mm/s"))
                         except Exception as e:
                             print("Error parsing time line:", e)
@@ -564,8 +561,6 @@ class WickingDashboard(QMainWindow):
             self.ax.text(0.5, 0.5, "No experiments selected", transform=self.ax.transAxes,
                          ha='center', va='center', fontsize=12, color='gray')
             self.plot_area.draw()
-            self.plot_area.repaint()   # 👈 Force repaint
-            self.plot_area.update()  
             return
 
         for item in selected_items:
@@ -588,9 +583,7 @@ class WickingDashboard(QMainWindow):
         self.ax.set_ylabel("Height (mm)" if self.plot_mode == "height" else "Wicking Rate (mm/s)")
         self.ax.legend()
         self.ax.grid(True, linestyle='--', alpha=0.5)
-        self.plot_area.draw()
-        self.plot_area.repaint()   # 👈 Force repaint
-        self.plot_area.update()  
+        self.plot_area.draw() 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
