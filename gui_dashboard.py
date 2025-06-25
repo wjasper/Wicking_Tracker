@@ -199,7 +199,7 @@ class WickingDashboard(QMainWindow):
         outer_layout = QVBoxLayout()
 
         # --- Add Title ---
-        heading_label = QLabel("Welcome to Wicking Tracker")
+        heading_label = QLabel("Sweat Management")
         heading_label.setAlignment(Qt.AlignCenter)
         heading_label.setStyleSheet("""
             font-size: 36px;
