@@ -18,12 +18,12 @@ def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
 
-
 def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color,update_status_func=None):
     df, height_plot_image = None, None,
-    area_of_interest_offset = 0
-    height = 0
-
+    # parameters for 
+    area_of_interest_offset = 0  # distance from bottom of bounding box to center of area of interest
+    area_of_interest_h = 10      # height of area_of_interest
+    height = 0                   # wicking height in mm
 
     # Before your main loop (only once)
     cv2.namedWindow("Sliding Window", cv2.WINDOW_NORMAL)
@@ -42,16 +42,20 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
     ax1.clear()
 
     max_delta_threshold = 38
-    min_delta_threshold = 10
+    min_delta_threshold = 15
+    height_threshold = 110
     current_delta_threshold = max_delta_threshold
     last_height_update_time = start_time
     last_height_value = 0
-    deactive_15_second = False
 
     while True:
         sliding_color_LAB = []
-        area_of_interest_y1 = bbox_y + bbox_h - area_of_interest_offset - 10
-        area_of_interest_y2 = bbox_y + bbox_h - area_of_interest_offset
+
+        if(height > height_threshold):
+            area_of_interest_h = 20
+            
+        area_of_interest_y1 = bbox_y + bbox_h - (area_of_interest_offset + area_of_interest_h//2) # top of area_of_interest
+        area_of_interest_y2 = bbox_y + bbox_h - (area_of_interest_offset - area_of_interest_h//2) # bottom of area_of_interest
 
         for _ in range(5):
             frame = cam.capture_array()
@@ -65,22 +69,53 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         average_sliding_window_color = np.mean(sliding_color_LAB, axis=0)
         delta_E_mean = calculate_delta(average_base_color, average_sliding_window_color)
 
-        height = mm_per_pixel * area_of_interest_offset + 2
+        height = mm_per_pixel*area_of_interest_offset
         now = datetime.datetime.now()
+        delta_time = (now - start_time).total_seconds()  # calculate elapsed time
 
-        # Adjust AOI
-        if(delta_E_mean > current_delta_threshold and height < height_in_mm):
-            print(f"Delta_E greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
-            last_height_value = height     
-            area_of_interest_offset += 2  # move the AOI up 2 pixels
-            height = mm_per_pixel * area_of_interest_offset + 2
-            last_height_update_time = now  # restart the timer
+
+
+        # Adjust area_of_interest
+        if(height < height_threshold):
+            if(delta_E_mean > current_delta_threshold):
+                print(f"Delta_E greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
+                last_height_value = height     
+                area_of_interest_offset += 2  # move the AOI up 2 pixels
+                height = mm_per_pixel*area_of_interest_offset
+                last_height_update_time = now  # restart the timer
+        else:
+            sliding_color_LAB_top_avg = []
+            sliding_color_LAB_bottom_avg = []
+            # calculate the realtive color difference between the top and bottom halfs of the area of interest
+            for _ in range(2):
+                frame = cam.capture_array()
+                region_top = frame[area_of_interest_y1:area_of_interest_y1 + area_of_interest_h//2, bbox_x:bbox_x + bbox_w]
+                sliding_color_LAB_top = np.mean(cv2.cvtColor(region_top, cv2.COLOR_BGR2Lab), axis=(0, 1))
+                sliding_color_LAB_top_avg.append(sliding_color_LAB_top)
+
+            average_sliding_window_color_top = np.mean(sliding_color_LAB_top_avg, axis=0)
+            delta_E_top = calculate_delta(average_base_color, average_sliding_window_color_top)
+
+            for _ in range(2):
+                frame = cam.capture_array()
+                region_bottom = frame[area_of_interest_y1 + area_of_interest_h//2:area_of_interest_y2, bbox_x:bbox_x + bbox_w]
+                sliding_color_LAB_bottom = np.mean(cv2.cvtColor(region_bottom, cv2.COLOR_BGR2Lab), axis=(0, 1))
+                sliding_color_LAB_bottom_avg.append(sliding_color_LAB_bottom)
+
+            average_sliding_window_color_bottom = np.mean(sliding_color_LAB_bottom_avg, axis=0)
+            delta_E_bottom = calculate_delta(average_base_color, average_sliding_window_color_bottom)
+
+            delta_percent = (delta_E_bottom - delta_E_top) / delta_E_bottom
+
+            if ((delta_percent > .2) and delta_E_mean > current_delta_threshold):
+                print(f"Delta_E greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
+                last_height_value = height     
+                area_of_interest_offset += 2  # move the AOI up 2 pixels
+                height = mm_per_pixel*area_of_interest_offset
+                last_height_update_time = now  # restart the timer
 
         if height >= height_in_mm:
             print("height greater than height of the bounding box", height)
-            # area_of_interest_offset = 0
-
-        delta_time = (now - start_time).total_seconds()  # calculate elapsed time
 
         if (now - last_height_update_time).total_seconds() > 10:
             new_threshold = delta_E_mean * 0.95
