@@ -24,7 +24,7 @@ def main():
     width = 640
     height = 480
 
-    USE_DUMMY_CAMERA = True  # Set to False when real camera is present
+    USE_DUMMY_CAMERA = False  # Set to False when real camera is present
 
     if USE_DUMMY_CAMERA:
         class DummyCamera:
