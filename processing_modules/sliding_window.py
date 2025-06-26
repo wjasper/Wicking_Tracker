@@ -106,6 +106,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             delta_E_bottom = calculate_delta(average_base_color, average_sliding_window_color_bottom)
 
             delta_percent = (delta_E_bottom - delta_E_top) / delta_E_bottom
+            print(delta_percent)
 
             if ((delta_percent > .2) and delta_E_mean > current_delta_threshold):
                 print(f"Delta_E greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
