@@ -73,8 +73,6 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
         now = datetime.datetime.now()
         delta_time = (now - start_time).total_seconds()  # calculate elapsed time
 
-
-
         # Adjust area_of_interest
         if(height < height_threshold):
             if(delta_E_mean > current_delta_threshold):
@@ -84,32 +82,23 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
                 height = mm_per_pixel*area_of_interest_offset
                 last_height_update_time = now  # restart the timer
         else:
-            sliding_color_LAB_top_avg = []
-            sliding_color_LAB_bottom_avg = []
-            # calculate the realtive color difference between the top and bottom halfs of the area of interest
-            for _ in range(2):
-                frame = cam.capture_array()
-                region_top = frame[area_of_interest_y1:area_of_interest_y1 + area_of_interest_h//2, bbox_x:bbox_x + bbox_w]
-                sliding_color_LAB_top = np.mean(cv2.cvtColor(region_top, cv2.COLOR_BGR2Lab), axis=(0, 1))
-                sliding_color_LAB_top_avg.append(sliding_color_LAB_top)
+            #Get a grayscale of the image
+            gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
 
-            average_sliding_window_color_top = np.mean(sliding_color_LAB_top_avg, axis=0)
-            delta_E_top = calculate_delta(average_base_color, average_sliding_window_color_top)
+            # Perform edge detection
+            edges = cv2.Canny(gray, 50, 50)
 
-            for _ in range(2):
-                frame = cam.capture_array()
-                region_bottom = frame[area_of_interest_y1 + area_of_interest_h//2:area_of_interest_y2, bbox_x:bbox_x + bbox_w]
-                sliding_color_LAB_bottom = np.mean(cv2.cvtColor(region_bottom, cv2.COLOR_BGR2Lab), axis=(0, 1))
-                sliding_color_LAB_bottom_avg.append(sliding_color_LAB_bottom)
+            # Apply  Probabilistic Hough Line Transform
+            lines = cv2.HoughLinesP(edges, 1, np.pi/180, 50, minLineLength=50, maxLineGap=10)
 
-            average_sliding_window_color_bottom = np.mean(sliding_color_LAB_bottom_avg, axis=0)
-            delta_E_bottom = calculate_delta(average_base_color, average_sliding_window_color_bottom)
+            #Draw the lines on the image
+            if lines is not None:
+                for line in lines:
+                    x1, y1, x2, y2 = line[0]
+                    cv2.line(region, (x1,y1), (x2,y2), (255,0,0), 2)
 
-            delta_percent = (delta_E_bottom - delta_E_top) / delta_E_bottom
-            print(delta_percent)
-
-            if ((delta_percent > .2) and delta_E_mean > current_delta_threshold):
-                print(f"Delta_E greater than threshold ({current_delta_threshold:.2f}), moving AOI up.")
+            if lines is None and delta_E_mean > current_delta_threshold: 
+                print(f"No edge deteced in image, moving AOI up")
                 last_height_value = height     
                 area_of_interest_offset += 2  # move the AOI up 2 pixels
                 height = mm_per_pixel*area_of_interest_offset
@@ -124,13 +113,6 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             current_delta_threshold = max(current_delta_threshold, min_delta_threshold)
             print(f"[INFO] No height change in 10s. Reducing delta threshold to {current_delta_threshold:.2f}")
         
-        # [ADDED] Reduce threshold if no height change for 10 seconds
-        #elif (now - last_height_update_time).total_seconds() > 10  and not deactive_15_second:
-        #    new_threshold = delta_E_mean * 1.1
-        #    current_delta_threshold = max(new_threshold, min_delta_threshold)
-        #    print(f"[INFO] No height change in 10s. Reducing delta threshold to {current_delta_threshold:.2f}")
-        
-        # Calculate wicking rate using cubic polynomial (sliding 4-point window)
         if len(df) >= 4:
             t_window = df["Time"].iloc[-4:].values
             h_window = df["Height"].iloc[-4:].values
