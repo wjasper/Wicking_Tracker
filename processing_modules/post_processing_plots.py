@@ -5,19 +5,48 @@ Created on Thu Mar 13 14:20:15 2025
 @author: Dr. Warren Jasper
 Refactored: SOS filtering applied inside a standalone function.
 """
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import butter, sosfiltfilt
+from scipy.interpolate import CubicSpline
+from scipy.linalg import lstsq
+from io import BytesIO
+from PIL import Image
+
+
+def derivative(t, h, npoints):
+    slope = []
+    #build the design matrix M
+    M = np.column_stack((np.ones_like(t), t, t*t, t*t*t))
+
+    M_subset = M[0:npoints]
+    h_subset = h[0:npoints]
+    a, res, rnk, s = lstsq(M_subset,h_subset)
+    for i in range(npoints//2):
+        slope.append(a[1] + 2*a[2]*t[i] + 3*a[3]*t[i]**2)
+            
+    for i in range(t.size - npoints):
+        j = i + npoints//2
+        M_subset = M[i:i+npoints]
+        h_subset = h[i:i+npoints]
+        a, res, rnk, s = lstsq(M_subset,h_subset)
+        slope.append(a[1] + 2*a[2]*t[j] + 3*a[3]*t[j]**2)
+
+    M_subset = M[t.size-npoints:t.size]
+    h_subset = h[t.size-npoints:t.size]
+    a, res, rnk, s = lstsq(M_subset,h_subset)
+    for i in range(t.size - npoints//2, t.size):
+         slope.append(a[1] + 2*a[2]*t[i] + 3*a[3]*t[i]**2)
+
+    return slope
 
 def post_process_wicking_rate(df, show_plots=True):
-    import pandas as pd
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from scipy.signal import butter, sosfiltfilt
-    from scipy.interpolate import CubicSpline
-    from io import BytesIO
-    from PIL import Image
 
     # 1) Extract data
     t = df["Time"].values
     h = df["Height"].values
+    npoints = 128
 
     if not np.all(np.diff(t) > 0):
         raise ValueError("Time vector must be strictly increasing")
@@ -28,7 +57,6 @@ def post_process_wicking_rate(df, show_plots=True):
 
     # 3) SOS Butterworth
     def apply_butterworth_sos(data, cutoff, fs, order=6):
-        from scipy.signal import butter, sosfiltfilt
         sos = butter(order, cutoff / (0.5 * fs), btype='low', output='sos')
         return sosfiltfilt(sos, data)
 
@@ -46,7 +74,8 @@ def post_process_wicking_rate(df, show_plots=True):
 
     wicking_rate_raw      = np.abs(cs_raw.derivative()(t))
     wicking_rate_interp   = np.abs(cs_interp.derivative()(t_uniform))
-    wicking_rate_filtered = np.abs(cs_filtered.derivative()(t_uniform))
+#    wicking_rate_filtered = np.abs(cs_filtered.derivative()(t_uniform))
+    wicking_rate_filtered = derivative(t_uniform, h_filtered, npoints)
 
     # 6) Store
     df["Time_Uniform"] = t_uniform
