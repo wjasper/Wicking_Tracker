@@ -104,8 +104,9 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
                 height = mm_per_pixel*area_of_interest_offset
                 last_height_update_time = now  # restart the timer
 
-        if height >= height_in_mm:
+        if round(height) >= height_in_mm:
             print("height greater than height of the bounding box", height)
+            break
 
         if (now - last_height_update_time).total_seconds() > 10:
             new_threshold = delta_E_mean * 0.95
