@@ -9,6 +9,7 @@ import sys
 import os
 import json
 import pandas as pd
+import numpy as np
 from PyQt5.QtCore import QTimer, Qt, QDate, QMetaObject, Q_ARG, pyqtSlot
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
@@ -23,6 +24,8 @@ import subprocess
 import threading
 from datetime import datetime
 import pytz
+from scipy.optimize import curve_fit
+
 
 
 def format_folder_name(folder_name):
@@ -158,7 +161,7 @@ class WickingDashboard(QMainWindow):
 
     def extract_summary_from_output(self, full_text):
         summary_lines = []
-        minutes = [1, 5, 10]
+        minutes = [1,2,3,4,5,6,7,8,9,10]
 
         for min_val in minutes:
             target_time = min_val * 60
@@ -337,17 +340,22 @@ class WickingDashboard(QMainWindow):
         # === CENTER PLOT PANEL ===
         self.height_radio = QRadioButton("Height")
         self.wicking_radio = QRadioButton("Wicking Rate")
+        self.avg_wicking_rate = QRadioButton("Avg Wicking Rate")
 
         self.radio_group = QButtonGroup()
         self.radio_group.addButton(self.height_radio)
         self.radio_group.addButton(self.wicking_radio)
+        self.radio_group.addButton(self.avg_wicking_rate)
+
         self.height_radio.toggled.connect(self.on_radio_change)
         self.wicking_radio.toggled.connect(self.on_radio_change)
+        self.avg_wicking_rate.toggled.connect(self.on_radio_change)
         self.height_radio.setChecked(True)
 
         radio_layout = QHBoxLayout()
         radio_layout.addWidget(self.height_radio)
         radio_layout.addWidget(self.wicking_radio)
+        radio_layout.addWidget(self.avg_wicking_rate)
 
 
         self.plot_area = FigureCanvas(Figure(figsize=(5, 4)))
@@ -550,16 +558,32 @@ class WickingDashboard(QMainWindow):
                 self.meta_view.setText(f"Failed to load metadata: {e}")
         else:
             self.meta_view.setText("No metadata found.")
+    
+    #methods
 
     def plot_selected_experiments(self):
         if not hasattr(self, "ax"):
             return  # Skip if ax isn't ready
         self.ax.clear()
-        self.plot_mode = "height" if self.height_radio.isChecked() else "wicking"
+
+        def model_f(t, H, tau, A):
+            return H * (1 - np.exp(-t / tau)) + A * np.sqrt(t)
+
+        def wicking_rate(t, H, tau, A):
+            return H / tau * np.exp(-t / tau) + A / (2 * np.sqrt(t))
+
+        # Determine the selected plot mode
+        if self.height_radio.isChecked():
+            self.plot_mode = "height"
+        elif self.wicking_radio.isChecked():
+            self.plot_mode = "wicking"
+        else:
+            return  # Ignore other modes
+
         selected_items = self.exp_list.selectedItems()
         if not selected_items:
             self.ax.text(0.5, 0.5, "No experiments selected", transform=self.ax.transAxes,
-                         ha='center', va='center', fontsize=12, color='gray')
+                        ha='center', va='center', fontsize=12, color='gray')
             self.plot_area.draw()
             return
 
@@ -568,22 +592,44 @@ class WickingDashboard(QMainWindow):
             folder_name = self.folder_display_map[display_name]
             folder = os.path.join(self.output_dir, folder_name)
             csv_path = os.path.join(folder, "data.csv")
-            if os.path.exists(csv_path):
-                try:
-                    df = pd.read_csv(csv_path)
-                    if self.plot_mode == "height":
-                        self.ax.plot(df["Time_Uniform"], df["Filtered Height (Raw)"], label=folder_name)
-                    elif self.plot_mode == "wicking":
-                        self.ax.plot(df["Time_Uniform"], df["Wicking Rate Filtered (Spline)"], label=folder_name)
-                except Exception as e:
-                    print(f"Error reading {folder_name}: {e}")
+            if not os.path.exists(csv_path):
+                continue
 
-        self.ax.set_title("Height vs Time" if self.plot_mode == "height" else "Wicking Rate")
+            try:
+                df = pd.read_csv(csv_path)
+                t_data = df["Time"].to_numpy()
+                h_data = df["Height"].to_numpy()
+
+                # Fit model to height data
+                popt, _ = curve_fit(model_f, t_data, h_data, p0=[31, 9, 4], maxfev=5000)
+                H_opt, tau_opt, A_opt = popt
+                t_model = np.linspace(min(t_data), max(t_data), 100)
+
+                if self.plot_mode == "height":
+                    h_model = model_f(t_model, H_opt, tau_opt, A_opt)
+                    self.ax.plot(t_data, h_data, color='blue', label=folder_name)
+                    self.ax.plot(t_model, h_model, color='red', label=folder_name)
+
+                elif self.plot_mode == "wicking":
+                    h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
+                    self.ax.plot(t_model, h_rate_model, label=folder_name)
+
+            except Exception as e:
+                print(f"Error processing {folder_name}: {e}")
+
+        # Set plot title and labels
+        if self.plot_mode == "height":
+            self.ax.set_title("Fitted Height vs Time")
+            self.ax.set_ylabel("Height (mm)")
+        elif self.plot_mode == "wicking":
+            self.ax.set_title("Wicking Rate vs Time (Fitted Model)")
+            self.ax.set_ylabel("Wicking Rate (mm/s)")
+
         self.ax.set_xlabel("Time (s)")
-        self.ax.set_ylabel("Height (mm)" if self.plot_mode == "height" else "Wicking Rate (mm/s)")
         self.ax.legend()
         self.ax.grid(True, linestyle='--', alpha=0.5)
-        self.plot_area.draw() 
+        self.plot_area.draw()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
