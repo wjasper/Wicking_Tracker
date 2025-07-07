@@ -108,11 +108,11 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             print("height greater than height of the bounding box", height)
             break
 
-        if (now - last_height_update_time).total_seconds() > 10:
+        if (now - last_height_update_time).total_seconds() > 4:
             new_threshold = delta_E_mean * 0.95
             current_delta_threshold = min(current_delta_threshold, max_delta_threshold, new_threshold)
             current_delta_threshold = max(current_delta_threshold, min_delta_threshold)
-            print(f"[INFO] No height change in 10s. Reducing delta threshold to {current_delta_threshold:.2f}")
+            print(f"[INFO] No height change in 4s. Reducing delta threshold to {current_delta_threshold:.2f}")
         
         if len(df) >= 4:
             t_window = df["Time"].iloc[-4:].values
