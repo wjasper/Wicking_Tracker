@@ -228,11 +228,11 @@ def calibration(cam, height, width):
 
 
 def base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h):
-    # cv2.namedWindow("Getting average over 500 frames")
+    # cv2.namedWindow("Getting average over 100 frames")
     base_colors = []
 
     print("STATUS: Calibrating wicking, this may take a while ...", flush=True)
-    for _ in range(500):  # Loop to capture the color 500 times
+    for _ in range(100):  # Loop to capture the color 100 times
         frame = cam.capture_array()
         if frame is None:
             break
@@ -245,5 +245,8 @@ def base_color(cam, bbox_x, bbox_y, bbox_w, bbox_h):
     # Now calculate the average of all collected base colors
     average_base_color = np.mean(base_colors, axis=0)  # Average across the 100 frames
     print("Average Base Color (Lab):", average_base_color)
+
+    # take one more image
+    frame = cam.capture_array()
 
     return average_base_color

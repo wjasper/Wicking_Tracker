@@ -18,14 +18,19 @@ def calculate_delta(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
 
-def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pixel, average_base_color,update_status_func=None):
+def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
+                   height_in_mm, mm_per_pixel,
+                   average_base_color,
+                   update_status_func=None):
+
     df, height_plot_image = None, None,
     # parameters for 
     area_of_interest_offset = 0  # distance from bottom of bounding box to center of area of interest
     area_of_interest_h = 10      # height of area_of_interest
     height = 0                   # wicking height in mm
+    delta_time = 0
 
-    # Before your main loop (only once)
+    # Initialization and setup code: do only once
     cv2.namedWindow("Sliding Window", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Sliding Window", 620, 520)
 
@@ -43,12 +48,13 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
 
     max_delta_threshold = 38
     min_delta_threshold = 15
-    height_threshold = 110
+    height_threshold = 50
     current_delta_threshold = max_delta_threshold
     last_height_update_time = start_time
     last_height_value = 0
 
-    while True:
+    while height < 150 and delta_time < 610:
+
         sliding_color_LAB = []
 
         if(height > height_threshold):
@@ -61,7 +67,6 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             frame = cam.capture_array()
             if frame is None:
                 break
-
             region = frame[area_of_interest_y1:area_of_interest_y2, bbox_x:bbox_x + bbox_w]
             sliding_window = np.mean(cv2.cvtColor(region, cv2.COLOR_BGR2Lab), axis=(0, 1))
             sliding_color_LAB.append(sliding_window)
@@ -89,25 +94,70 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             edges = cv2.Canny(gray, 50, 50)
 
             # Apply  Probabilistic Hough Line Transform
-            lines = cv2.HoughLinesP(edges, 1, np.pi/180, 50, minLineLength=50, maxLineGap=10)
+            lines = cv2.HoughLinesP(edges, 1, np.pi/180, 80, minLineLength=(bbox_w//2), maxLineGap=30)
 
             #Draw the lines on the image
             if lines is not None:
                 for line in lines:
                     x1, y1, x2, y2 = line[0]
                     cv2.line(region, (x1,y1), (x2,y2), (255,0,0), 2)
+                    area_of_interest_offset += max(area_of_interest_h//2 - y2, 0)
+                    last_height_value = height     
+                    height = mm_per_pixel*area_of_interest_offset
+                
+#            elif delta_E_mean > current_delta_threshold: 
+#                print(f"No edge deteced in image, moving AOI up")
+#                last_height_value = height     
+#                area_of_interest_offset += 2  # move the AOI up 2 pixels
+#                height = mm_per_pixel*area_of_interest_offset
+#                last_height_update_time = now  # restart the timer
 
-            if lines is None and delta_E_mean > current_delta_threshold: 
-                print(f"No edge deteced in image, moving AOI up")
-                last_height_value = height     
-                area_of_interest_offset += 2  # move the AOI up 2 pixels
-                height = mm_per_pixel*area_of_interest_offset
-                last_height_update_time = now  # restart the timer
+            else:
+                # Convert area_of_interest to HSV
+                hsv_image = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+
+                # Define the HSV range for a specific color (red dye)
+                # lower_red1 = np.array([0, 10, 20])
+                # upper_red1 = np.array([10, 255, 255])
+                # lower_red2 = np.array([340, 10, 70])
+                # upper_red2 = np.array([360, 255, 255])
+
+                lower_red1 = np.array([0, 40, 40])
+                upper_red1 = np.array([10, 255, 255])
+                lower_red2 = np.array([170, 40, 40])
+                upper_red2 = np.array([179, 255, 255])
+
+                lower_pink = np.array([145, 30, 80])     # Adjust these for more sensitivity
+                upper_pink = np.array([170, 255, 255])
+                                
+                # Create a mask
+                mask1 = cv2.inRange(hsv_image, lower_red1, upper_red1)
+                mask2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
+                mask3 = cv2.inRange(hsv_image, lower_pink, upper_pink)
+                red_mask = cv2.bitwise_or(cv2.bitwise_or(mask1, mask2), mask3)
+                red_object = cv2.bitwise_and(hsv_image, hsv_image, mask=red_mask)
+
+                cv2.imshow("red_mask", red_mask)
+                cv2.imshow("red objects", red_object)
+                cv2.imshow("region", region)
+
+                # See if there is red in the region
+                pixels = cv2.countNonZero(red_mask)
+                print("number of red pixels =", pixels)
+
+                if pixels > 10:
+                    last_height_value = height     
+                    area_of_interest_offset += 2  # move the AOI up 2 pixels
+                    height = mm_per_pixel*area_of_interest_offset
+                    last_height_update_time = now  # restart the timer
+                    print("Red in region")
+                else:
+                    print("No red in region")
 
         if round(height) >= height_in_mm:
             print("height greater than height of the bounding box", height)
             break
-
+        
         if (now - last_height_update_time).total_seconds() > 4:
             new_threshold = delta_E_mean * 0.95
             current_delta_threshold = min(current_delta_threshold, max_delta_threshold, new_threshold)
@@ -148,7 +198,6 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h, height_in_mm, mm_per_pix
             print(f"Avg Wicking Rate: {height/delta_time:.4f} mm/s")
         else:
             print("Avg Wicking Rate: N/A (delta_time is zero)")
-
 
         # Draw bounding boxes
         cv2.rectangle(frame, (bbox_x, bbox_y), (bbox_x + bbox_w, bbox_y + bbox_h), (0, 0, 255), 2)
