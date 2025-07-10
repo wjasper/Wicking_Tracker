@@ -11,7 +11,6 @@ from PIL import Image
 from .post_processing_plots import post_process_wicking_rate
 from .save_data import SaveDialog
 from scipy.interpolate import CubicSpline
-
 from PyQt5.QtWidgets import QMessageBox
 
 def calculate_delta(base_color, sliding_window_color):
