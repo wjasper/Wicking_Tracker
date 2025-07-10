@@ -63,7 +63,7 @@ def post_process_wicking_rate(df, show_plots=True):
     buf_wick = BytesIO()
     plt.figure(figsize=(12, 6))
     plt.plot(t_model, h_rate_model, label="wicking_rate", color="red", alpha=0.8)
-    plt.xlabel("Time [s]")
+    plt.xlabel("Time (s)")
     plt.ylabel("Wicking Rate (mm/s)")
     plt.title("Wicking Rate")
     plt.legend()
