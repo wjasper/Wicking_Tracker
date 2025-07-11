@@ -52,7 +52,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
     last_height_update_time = start_time
     last_height_value = 0
 
-    while height < 150 and delta_time < 610:
+    while height < 101 and delta_time < 610:
 
         sliding_color_LAB = []
 
@@ -92,7 +92,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
             # Perform edge detection
             edges = cv2.Canny(gray, 50, 50)
 
-            # Apply  Probabilistic Hough Line Transform
+            # Apply Probabilistic Hough Line Transform
             lines = cv2.HoughLinesP(edges, 1, np.pi/180, 80, minLineLength=(bbox_w//2), maxLineGap=30)
 
             #Draw the lines on the image
@@ -115,12 +115,6 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
                 # Convert area_of_interest to HSV
                 hsv_image = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
 
-                # Define the HSV range for a specific color (red dye)
-                # lower_red1 = np.array([0, 10, 20])
-                # upper_red1 = np.array([10, 255, 255])
-                # lower_red2 = np.array([340, 10, 70])
-                # upper_red2 = np.array([360, 255, 255])
-
                 lower_red1 = np.array([0, 40, 40])
                 upper_red1 = np.array([10, 255, 255])
                 lower_red2 = np.array([170, 40, 40])
@@ -136,9 +130,9 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
                 red_mask = cv2.bitwise_or(cv2.bitwise_or(mask1, mask2), mask3)
                 red_object = cv2.bitwise_and(hsv_image, hsv_image, mask=red_mask)
 
-                cv2.imshow("red_mask", red_mask)
-                cv2.imshow("red objects", red_object)
-                cv2.imshow("region", region)
+#                cv2.imshow("red_mask", red_mask)
+#                cv2.imshow("red objects", red_object)
+#                cv2.imshow("region", region)
 
                 # See if there is red in the region
                 pixels = cv2.countNonZero(red_mask)
@@ -190,7 +184,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
 
         if update_status_func:
             update_status_func(delta_time, delta_E_mean, height, avg_rate, current_delta_threshold)
-        # Prin t live values
+        # Print live values
         print(f"Time: {delta_time:.2f} s | Delta E: {delta_E_mean:.4f} | Height: {height:.4f} mm | Delta Threshold: {current_delta_threshold:.2f} | Wicking Rate: {wicking_rate:.2f} mm")
 
         if delta_time > 0:

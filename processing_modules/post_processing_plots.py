@@ -32,14 +32,14 @@ def post_process_wicking_rate(df, show_plots=True):
     H_opt, tau_opt, A_opt = popt
     
     #3) Generate wicking Rate
-    t_model = np.linspace(min(t_data), max(t_data), len(t_data))
+    t_model = np.linspace(0, max(t_data), len(t_data))
     h_model = model_f(t_model, H_opt, tau_opt, A_opt)
     h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
 
     # 4) Store models
     df["Time_Uniform"] = t_model
-    df["Height (Model)"] = h_model
-    df["Wicking Rate"] = h_rate_model
+    df["Height_Model"] = h_model
+    df["Wicking_Rate"] = h_rate_model
 
     # 5) Plot: Heights
     from io import BytesIO
