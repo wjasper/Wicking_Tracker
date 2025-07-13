@@ -703,6 +703,15 @@ class WickingDashboard(QMainWindow):
             self.ax.set_ylabel("Wicking Rate (mm/s)")
 
         self.ax.set_xlabel("Time (s)")
+
+        # Add custom y-ticks only for wicking rate plot
+        # Custom Y-ticks
+        y_min, y_max = self.ax.get_ylim()
+        if self.plot_mode == "wicking":
+            self.ax.set_yticks(np.arange(0, y_max + 0.5, 0.5))  # every 0.5 mm/s
+        elif self.plot_mode == "height":
+            self.ax.set_yticks(np.arange(0, y_max + 10, 10))    # every 10 mm
+
         self.ax.legend()
         self.ax.grid(True, linestyle='--', alpha=0.5)
         self.plot_area.draw()
