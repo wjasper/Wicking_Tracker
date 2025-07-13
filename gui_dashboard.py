@@ -320,6 +320,8 @@ class WickingDashboard(QMainWindow):
         self.exp_list = QListWidget()
         self.exp_list.setSelectionMode(QListWidget.SingleSelection)
         self.exp_list.itemClicked.connect(self.display_experiment_data)
+        self.exp_list.itemClicked.connect(self.plot_selected_experiments)
+
 
         self.multi_select_checkbox = QCheckBox("Enable multi-select")
         self.multi_select_checkbox.stateChanged.connect(self.toggle_selection_mode)
@@ -607,22 +609,23 @@ class WickingDashboard(QMainWindow):
         folder_name = self.folder_display_map[item.text()]
         folder = os.path.join(self.output_dir, folder_name)
         csv_path = os.path.join(folder, "data.csv")
-        json_path = os.path.join(folder, "metadata.json")
-
-        # Only call this:
-        self.plot_selected_experiments()
-
-        # No need to replot again manually here
-        # Just draw the metadata section:
-        if os.path.exists(json_path):
+        
+        if os.path.exists(csv_path):
             try:
-                with open(json_path, 'r') as f:
-                    meta = json.load(f)
-                self.meta_view.setText(json.dumps(meta, indent=2))
+                df = pd.read_csv(csv_path)
+                summary_lines = []
+                for min_val in range(1, 11):
+                    target_time = min_val * 60
+                    closest_idx = (df["Time"] - target_time).abs().idxmin()
+                    time_val = df.loc[closest_idx, "Time"]
+                    height_val = df.loc[closest_idx, "Height"]
+                    rate_val = df.loc[closest_idx, "Avg Wicking Rate"] if "Avg Wicking Rate" in df.columns else height_val / time_val
+                    summary_lines.append(f"{min_val} min - Height: {height_val:.2f} mm | Rate: {rate_val:.4f} mm/s")
+                self.meta_view.setText("\n".join(summary_lines))
             except Exception as e:
-                self.meta_view.setText(f"Failed to load metadata: {e}")
+                self.meta_view.setText(f"Failed to parse data.csv: {e}")
         else:
-            self.meta_view.setText("No metadata found.")
+            self.meta_view.setText("No data.csv found.")
     
     #methods
 
