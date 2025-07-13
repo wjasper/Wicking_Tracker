@@ -338,34 +338,87 @@ class WickingDashboard(QMainWindow):
         left_widget.setLayout(left_panel)
 
         # === CENTER PLOT PANEL ===
+        # Primary plot type radios
         self.height_radio = QRadioButton("Height")
         self.wicking_radio = QRadioButton("Wicking Rate")
-        self.avg_wicking_rate = QRadioButton("Avg Wicking Rate")
+        self.height_radio.setChecked(True)
 
         self.radio_group = QButtonGroup()
         self.radio_group.addButton(self.height_radio)
         self.radio_group.addButton(self.wicking_radio)
-        self.radio_group.addButton(self.avg_wicking_rate)
 
         self.height_radio.toggled.connect(self.on_radio_change)
         self.wicking_radio.toggled.connect(self.on_radio_change)
-        self.avg_wicking_rate.toggled.connect(self.on_radio_change)
-        self.height_radio.setChecked(True)
 
-        radio_layout = QHBoxLayout()
-        radio_layout.addWidget(self.height_radio)
-        radio_layout.addWidget(self.wicking_radio)
-        radio_layout.addWidget(self.avg_wicking_rate)
+        # === Secondary radios for Height
+        self.height_fitted_radio = QRadioButton("Fitted Only")
+        self.height_raw_and_fitted_radio = QRadioButton("Raw + Fitted")
+        self.height_fitted_radio.setChecked(True)
 
+
+        self.height_mode_group = QButtonGroup()
+        self.height_mode_group.addButton(self.height_fitted_radio)
+        self.height_mode_group.addButton(self.height_raw_and_fitted_radio)
+
+        self.height_mode_widget = QWidget()
+        height_mode_layout = QHBoxLayout()
+        height_mode_layout.setContentsMargins(0, 0, 0, 0)
+        height_mode_layout.addWidget(self.height_fitted_radio)
+        height_mode_layout.addWidget(self.height_raw_and_fitted_radio)
+        self.height_mode_widget.setLayout(height_mode_layout)
+
+        # === Secondary radios for Wicking
+        self.model_rate_radio = QRadioButton("Model-Based Rate")
+        self.avg_rate_radio = QRadioButton("Avg Wicking Rate")
+        self.model_rate_radio.setChecked(True)
+
+        self.height_fitted_radio.toggled.connect(self.plot_selected_experiments)
+        self.height_raw_and_fitted_radio.toggled.connect(self.plot_selected_experiments)
+        self.model_rate_radio.toggled.connect(self.plot_selected_experiments)
+        self.avg_rate_radio.toggled.connect(self.plot_selected_experiments)
+
+
+        self.wicking_mode_group = QButtonGroup()
+        self.wicking_mode_group.addButton(self.model_rate_radio)
+        self.wicking_mode_group.addButton(self.avg_rate_radio)
+
+        self.wicking_mode_widget = QWidget()
+        wicking_mode_layout = QHBoxLayout()
+        wicking_mode_layout.setContentsMargins(0, 0, 0, 0)
+        wicking_mode_layout.addWidget(self.model_rate_radio)
+        wicking_mode_layout.addWidget(self.avg_rate_radio)
+        self.wicking_mode_widget.setLayout(wicking_mode_layout)
+
+        # Top row: height/wicking
+        row1_layout = QHBoxLayout()
+        row1_layout.addWidget(self.height_radio)
+        row1_layout.addWidget(self.wicking_radio)
+
+        # Create the stacked widget to switch between the two mode options
+        self.dynamic_mode_container = QStackedWidget()
+        self.dynamic_mode_container.addWidget(self.height_mode_widget)   # index 0
+        self.dynamic_mode_container.addWidget(self.wicking_mode_widget)  # index 1
+
+        # Wrap it in a container widget (optional but sometimes useful for layout)
+        self.dynamic_mode_wrapper = QWidget()
+        wrapper_layout = QVBoxLayout()
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.addWidget(self.dynamic_mode_container)
+        self.dynamic_mode_wrapper.setLayout(wrapper_layout)
+
+        # Add to final radio layout
+        radio_layout = QVBoxLayout()
+        radio_layout.addLayout(row1_layout)
+        radio_layout.addWidget(self.dynamic_mode_wrapper)
 
         self.plot_area = FigureCanvas(Figure(figsize=(5, 4)))
         self.ax = self.plot_area.figure.add_subplot(111)
         self.toolbar = NavigationToolbar(self.plot_area, self)
 
         plot_container = QVBoxLayout()
-        plot_container.addWidget(self.toolbar)
-        plot_container.addLayout(radio_layout)
-        plot_container.addWidget(self.plot_area)
+        plot_container.addWidget(self.toolbar, stretch=0)
+        plot_container.addLayout(radio_layout, stretch=0)
+        plot_container.addWidget(self.plot_area, stretch=1)
 
         plot_widget = QWidget()
         plot_widget.setObjectName("PlotPanel")
@@ -400,10 +453,22 @@ class WickingDashboard(QMainWindow):
         view_widget.setLayout(outer_layout)
         self.stack.addWidget(view_widget)
         self.refresh_experiment_list()
+        self.on_radio_change()
 
     def on_radio_change(self):
-        self.plot_mode = "height" if self.height_radio.isChecked() else "wicking"
+        if self.height_radio.isChecked():
+            self.plot_mode = "height"
+            self.dynamic_mode_container.setCurrentIndex(0)
+
+        elif self.wicking_radio.isChecked():
+            self.plot_mode = "wicking"
+            self.dynamic_mode_container.setCurrentIndex(1)
+
+        else:
+            return
+
         self.plot_selected_experiments()
+
 
     def toggle_selection_mode(self, state):
         mode = QListWidget.MultiSelection if state == Qt.Checked else QListWidget.SingleSelection
@@ -578,7 +643,7 @@ class WickingDashboard(QMainWindow):
         elif self.wicking_radio.isChecked():
             self.plot_mode = "wicking"
         else:
-            return  # Ignore other modes
+            return
 
         selected_items = self.exp_list.selectedItems()
         if not selected_items:
@@ -606,13 +671,22 @@ class WickingDashboard(QMainWindow):
                 t_model = np.linspace(min(t_data), max(t_data), 100)
 
                 if self.plot_mode == "height":
+                    is_fitted_only = self.height_fitted_radio.isChecked()
                     h_model = model_f(t_model, H_opt, tau_opt, A_opt)
-                    self.ax.plot(t_data, h_data, color='blue', label=folder_name)
-                    self.ax.plot(t_model, h_model, color='red', label=folder_name)
+
+                    if not is_fitted_only:
+                        self.ax.plot(t_data, h_data, label=f"{folder_name} (data)")
+                    self.ax.plot(t_model, h_model, label=f"{folder_name} (fit)")
 
                 elif self.plot_mode == "wicking":
-                    h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
-                    self.ax.plot(t_model, h_rate_model, label=folder_name)
+                    use_avg = self.avg_rate_radio.isChecked()
+
+                    if use_avg and "Avg Wicking Rate" in df.columns:
+                        self.ax.plot(df["Time"], df["Avg Wicking Rate"], label=f"{folder_name} (avg rate)")
+                    else:
+                        h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
+                        self.ax.plot(t_model, h_rate_model, label=f"{folder_name} (model rate)")
+
 
             except Exception as e:
                 print(f"Error processing {folder_name}: {e}")
