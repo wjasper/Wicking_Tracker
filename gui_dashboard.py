@@ -639,6 +639,7 @@ class WickingDashboard(QMainWindow):
             return H * (1 - np.exp(-t / tau)) + A * np.sqrt(t)
 
         def wicking_rate(t, H, tau, A):
+            np.seterr(divide='ignore', invalid='ignore')
             return H / tau * np.exp(-t / tau) + A / (2 * np.sqrt(t))
 
         # Determine the selected plot mode
