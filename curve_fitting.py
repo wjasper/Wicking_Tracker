@@ -61,7 +61,7 @@ print("popt =", popt)
 print("pcov =", pcov)
 H_opt, tau_opt, A_opt = popt
 
-t_model = np.linspace(min(t_data), max(t_data), 100)
+t_model = np.linspace(0, max(t_data), len(t_data))
 h_model = model_f(t_model, H_opt, tau_opt, A_opt)
 
 h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)

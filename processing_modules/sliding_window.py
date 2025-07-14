@@ -37,7 +37,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
     plot_time = start_time + datetime.timedelta(seconds=15)
 
     # data_list = []
-    df = pd.DataFrame(columns=['Time', 'Height', 'Wicking Rate','Avg Wicking Rate'])
+    df = pd.DataFrame(columns=['Time', 'Height','Avg Wicking Rate'])
 
     # plot setup
     plt.ion()
@@ -52,7 +52,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
     last_height_update_time = start_time
     last_height_value = 0
 
-    while height < 101 and delta_time < 610:
+    while height < 160 and delta_time < 610:
 
         sliding_color_LAB = []
 
@@ -61,6 +61,9 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
             
         area_of_interest_y1 = bbox_y + bbox_h - (area_of_interest_offset + area_of_interest_h//2) # top of area_of_interest
         area_of_interest_y2 = bbox_y + bbox_h - (area_of_interest_offset - area_of_interest_h//2) # bottom of area_of_interest
+
+        pixels_threshold= bbox_w * area_of_interest_h * 0.4
+
 
         for _ in range(5):
             frame = cam.capture_array()
@@ -95,12 +98,40 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
             # Apply Probabilistic Hough Line Transform
             lines = cv2.HoughLinesP(edges, 1, np.pi/180, 80, minLineLength=(bbox_w//2), maxLineGap=30)
 
+            # Convert area_of_interest to HSV
+            hsv_image = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+
+            lower_red1 = np.array([0, 40, 40])
+            upper_red1 = np.array([10, 255, 255])
+            lower_red2 = np.array([170, 40, 40])
+            upper_red2 = np.array([179, 255, 255])
+
+            lower_pink = np.array([145, 30, 80])     # Adjust these for more sensitivity
+            upper_pink = np.array([170, 255, 255])
+                                
+            # Create a mask
+            mask1 = cv2.inRange(hsv_image, lower_red1, upper_red1)
+            mask2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
+            mask3 = cv2.inRange(hsv_image, lower_pink, upper_pink)
+            red_mask = cv2.bitwise_or(cv2.bitwise_or(mask1, mask2), mask3)
+            red_object = cv2.bitwise_and(hsv_image, hsv_image, mask=red_mask)
+
+#                cv2.imshow("red_mask", red_mask)
+#                cv2.imshow("red objects", red_object)
+#                cv2.imshow("region", region)
+
+            # See if there is red in the region
+            pixels = cv2.countNonZero(red_mask)
+            print("number of red pixels =", pixels)
+
             #Draw the lines on the image
-            if lines is not None:
+            if lines is not None and pixels > 0:
                 for line in lines:
                     x1, y1, x2, y2 = line[0]
                     cv2.line(region, (x1,y1), (x2,y2), (255,0,0), 2)
-                    area_of_interest_offset += max(area_of_interest_h//2 - y2, 0)
+                    # area_of_interest_offset += max(area_of_interest_h//2 - y2, 0)
+                    area_of_interest_offset += min(max(area_of_interest_h//2 - y2, 0), 2)
+                    print("y2: ", y2)
                     last_height_value = height     
                     height = mm_per_pixel*area_of_interest_offset
                 
@@ -110,35 +141,8 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
 #                area_of_interest_offset += 2  # move the AOI up 2 pixels
 #                height = mm_per_pixel*area_of_interest_offset
 #                last_height_update_time = now  # restart the timer
-
             else:
-                # Convert area_of_interest to HSV
-                hsv_image = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-
-                lower_red1 = np.array([0, 40, 40])
-                upper_red1 = np.array([10, 255, 255])
-                lower_red2 = np.array([170, 40, 40])
-                upper_red2 = np.array([179, 255, 255])
-
-                lower_pink = np.array([145, 30, 80])     # Adjust these for more sensitivity
-                upper_pink = np.array([170, 255, 255])
-                                
-                # Create a mask
-                mask1 = cv2.inRange(hsv_image, lower_red1, upper_red1)
-                mask2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
-                mask3 = cv2.inRange(hsv_image, lower_pink, upper_pink)
-                red_mask = cv2.bitwise_or(cv2.bitwise_or(mask1, mask2), mask3)
-                red_object = cv2.bitwise_and(hsv_image, hsv_image, mask=red_mask)
-
-#                cv2.imshow("red_mask", red_mask)
-#                cv2.imshow("red objects", red_object)
-#                cv2.imshow("region", region)
-
-                # See if there is red in the region
-                pixels = cv2.countNonZero(red_mask)
-                print("number of red pixels =", pixels)
-
-                if pixels > 10:
+                if pixels > pixels_threshold:
                     last_height_value = height     
                     area_of_interest_offset += 2  # move the AOI up 2 pixels
                     height = mm_per_pixel*area_of_interest_offset
@@ -150,12 +154,20 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
         if round(height) >= height_in_mm:
             print("height greater than height of the bounding box", height)
             break
+
+        # pixels_threshold_reduced = False
         
         if (now - last_height_update_time).total_seconds() > 4:
             new_threshold = delta_E_mean * 0.95
             current_delta_threshold = min(current_delta_threshold, max_delta_threshold, new_threshold)
             current_delta_threshold = max(current_delta_threshold, min_delta_threshold)
             print(f"[INFO] No height change in 4s. Reducing delta threshold to {current_delta_threshold:.2f}")
+            print(f"Pixel Threshold {pixels_threshold:.2f}")
+            # pixels_threshold = 0.5 * pixels_threshold
+
+            # if not pixels_threshold_reduced:
+            #     pixels_threshold = 0.5 * pixels_threshold
+            #     pixels_threshold_reduced = True
         
         if len(df) >= 4:
             t_window = df["Time"].iloc[-4:].values
@@ -180,7 +192,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
 
         # Update data for Average height
         avg_rate = height / delta_time if delta_time > 0 else 0
-        df.loc[len(df)] = [delta_time, height, 0, avg_rate] 
+        df.loc[len(df)] = [delta_time, height, avg_rate] 
 
         if update_status_func:
             update_status_func(delta_time, delta_E_mean, height, avg_rate, current_delta_threshold)

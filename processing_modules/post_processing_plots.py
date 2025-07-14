@@ -13,7 +13,14 @@ from PIL import Image
 from scipy.optimize import curve_fit
 
 def wicking_rate(t, H, tau, A):
-    return H/tau*np.exp(-t/tau) + A/(2*np.sqrt(t))
+    rate = []
+    for i in range(len(t)):
+        if t[i] != 0:
+            rate.append(H/tau*np.exp(-t[i]/tau) + A/(2*np.sqrt(t[i])))
+        else:   
+            rate.append(0.0)
+    rate = np.array(rate)
+    return rate
 
 def model_f(t, H, tau, A):
     return H*(1 - np.exp(-t/tau)) + A*np.sqrt(t)

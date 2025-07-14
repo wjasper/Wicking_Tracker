@@ -3,7 +3,7 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 class BoundingBox:
-    def __init__(self, x=240, y=18, w=132, h=391):
+    def __init__(self, x=240, y=16, w=132, h=458):
         self.x = x
         self.y = y
         self.w = w
@@ -112,7 +112,7 @@ class BoundingBox:
 
 
 def calibration(cam, height, width):
-    bbox = BoundingBox(x=240, y=18, w=132, h=391)
+    bbox = BoundingBox(x=240, y=16, w=132, h=458)
     cv2.namedWindow("Calibration")
     cv2.setMouseCallback("Calibration", bbox.handle_mouse, {"height": height, "width": width})
     instructions = "Drag corners to resize, drag center to move. Press 'q' to quit." 
@@ -218,7 +218,8 @@ def calibration(cam, height, width):
         except ValueError:
             QMessageBox.warning(None, "Invalid Input", "Please enter a valid integer.")
         
-    bbox.mm_per_pixel = 0.449735
+#    bbox.mm_per_pixel = 0.449735
+    bbox.mm_per_pixel = 160/458
     # height_in_mm = bbox.mm_per_pixel * bbox.h
 
     print("Hardcoded mm_per_pixel:", bbox.mm_per_pixel)
