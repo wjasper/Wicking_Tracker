@@ -7,6 +7,7 @@ Created on Thu Mar 13 14:20:15 2025
 """
 import sys
 import os
+import re
 import json
 import pandas as pd
 import numpy as np
@@ -659,6 +660,7 @@ class WickingDashboard(QMainWindow):
             display_name = item.text()
             folder_name = self.folder_display_map[display_name]
             folder = os.path.join(self.output_dir, folder_name)
+            clean_label = re.sub(r"_\d{8}_\d{6}$", "", folder_name)
             csv_path = os.path.join(folder, "data.csv")
             if not os.path.exists(csv_path):
                 continue
@@ -679,21 +681,21 @@ class WickingDashboard(QMainWindow):
                     h_model = model_f(t_model, H_opt, tau_opt, A_opt)
 
                     if not is_fitted_only:
-                        self.ax.plot(t_data, h_data, label=f"{folder_name} (data)")
-                    self.ax.plot(t_model, h_model, label=f"{folder_name} (fit)")
+                        self.ax.plot(t_data, h_data, label=f"{clean_label} (data)")
+                    self.ax.plot(t_model, h_model, label=f"{clean_label} (fit)")
 
                 elif self.plot_mode == "wicking":
                     use_avg = self.avg_rate_radio.isChecked()
 
                     if use_avg and "Avg Wicking Rate" in df.columns:
-                        self.ax.plot(df["Time"], df["Avg Wicking Rate"], label=f"{folder_name} (avg rate)")
+                        self.ax.plot(df["Time"], df["Avg Wicking Rate"], label=f"{clean_label}")
                     else:
                         h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
-                        self.ax.plot(t_model, h_rate_model, label=f"{folder_name} (model rate)")
+                        self.ax.plot(t_model, h_rate_model, label=f"{clean_label}")
 
 
             except Exception as e:
-                print(f"Error processing {folder_name}: {e}")
+                print(f"Error processing {clean_label}: {e}")
 
         # Set plot title and labels
         if self.plot_mode == "height":
