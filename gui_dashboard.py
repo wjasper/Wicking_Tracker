@@ -671,7 +671,8 @@ class WickingDashboard(QMainWindow):
                 # Fit model to height data
                 popt, _ = curve_fit(model_f, t_data, h_data, p0=[31, 9, 4], maxfev=5000)
                 H_opt, tau_opt, A_opt = popt
-                t_model = np.linspace(min(t_data), max(t_data), 100)
+                # t_model = np.linspace(min(t_data), max(t_data), 100)
+                t_model = np.linspace(0, max(t_data), len(t_data))
 
                 if self.plot_mode == "height":
                     is_fitted_only = self.height_fitted_radio.isChecked()
