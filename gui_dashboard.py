@@ -610,19 +610,35 @@ class WickingDashboard(QMainWindow):
         folder_name = self.folder_display_map[item.text()]
         folder = os.path.join(self.output_dir, folder_name)
         csv_path = os.path.join(folder, "data.csv")
-        
+
         if os.path.exists(csv_path):
             try:
                 df = pd.read_csv(csv_path)
                 summary_lines = []
                 for min_val in range(1, 11):
                     target_time = min_val * 60
+
+                    if df["Time"].max() < target_time:
+                        continue  # skip if time range is insufficient
+
                     closest_idx = (df["Time"] - target_time).abs().idxmin()
                     time_val = df.loc[closest_idx, "Time"]
+
+                    if abs(time_val - target_time) > 10:
+                        continue  # skip if too far from target time
+
                     height_val = df.loc[closest_idx, "Height"]
-                    rate_val = df.loc[closest_idx, "Avg Wicking Rate"] if "Avg Wicking Rate" in df.columns else height_val / time_val
-                    summary_lines.append(f"{min_val} min - Height: {height_val:.2f} mm | Rate: {rate_val:.4f} mm/s")
-                self.meta_view.setText("\n".join(summary_lines))
+                    rate_val = (
+                        df.loc[closest_idx, "Avg Wicking Rate"]
+                        if "Avg Wicking Rate" in df.columns
+                        else height_val / time_val
+                    )
+                    summary_lines.append(
+                        f"{min_val} min height: {height_val:.2f} mm | Avg Rate: {rate_val:.4f} mm/s"
+                    )
+
+                self.meta_view.setText("\n".join(summary_lines) if summary_lines else "No summary data available.")
+
             except Exception as e:
                 self.meta_view.setText(f"Failed to parse data.csv: {e}")
         else:
