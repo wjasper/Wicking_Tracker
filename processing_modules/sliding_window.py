@@ -52,7 +52,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
     last_height_update_time = start_time
     last_height_value = 0
 
-    while height < 160 and delta_time < 610:
+    while height < 101 and delta_time < 610:
 
         sliding_color_LAB = []
 
