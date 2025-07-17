@@ -13,7 +13,7 @@ from .save_data import SaveDialog
 from scipy.interpolate import CubicSpline
 from PyQt5.QtWidgets import QMessageBox
 
-def calculate_delta(base_color, sliding_window_color):
+def calculate_deltaE(base_color, sliding_window_color):
     """ Calculate the Euclidean distance (delta) between two Lab colors """
     return np.linalg.norm(base_color - sliding_window_color)
 
@@ -25,7 +25,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
     df, height_plot_image = None, None,
     # parameters for 
     area_of_interest_offset = 0  # distance from bottom of bounding box to center of area of interest
-    area_of_interest_h = 10      # height of area_of_interest
+    area_of_interest_h = 10      # height of area_of_interest (adaptive)
     height = 0                   # wicking height in mm
     delta_time = 0
 
@@ -56,14 +56,13 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
 
         sliding_color_LAB = []
 
-        if(height > height_threshold):
+        if (height > height_threshold):
             area_of_interest_h = 20
             
         area_of_interest_y1 = bbox_y + bbox_h - (area_of_interest_offset + area_of_interest_h//2) # top of area_of_interest
         area_of_interest_y2 = bbox_y + bbox_h - (area_of_interest_offset - area_of_interest_h//2) # bottom of area_of_interest
 
-        pixels_threshold= bbox_w * area_of_interest_h * 0.4
-
+        pixels_threshold = int(bbox_w * area_of_interest_h * 0.4)
 
         for _ in range(5):
             frame = cam.capture_array()
@@ -74,7 +73,7 @@ def sliding_window(cam, bbox_x, bbox_y, bbox_w, bbox_h,
             sliding_color_LAB.append(sliding_window)
 
         average_sliding_window_color = np.mean(sliding_color_LAB, axis=0)
-        delta_E_mean = calculate_delta(average_base_color, average_sliding_window_color)
+        delta_E_mean = calculate_deltaE(average_base_color, average_sliding_window_color)
 
         height = mm_per_pixel*area_of_interest_offset
         now = datetime.datetime.now()
