@@ -3,7 +3,7 @@
 
 """
 Created on Thu Mar 13 14:20:15 2025
-@author: Dr. Warren Jasper and Shivam Ghodke
+@author: Dr. Warren Jasper
 """
 import sys
 import os

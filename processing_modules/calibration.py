@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Mar 13 14:20:15 2025
+@author: Dr. Warren Jasper
+"""
 import cv2
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox

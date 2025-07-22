@@ -3,8 +3,8 @@
 """
 Created on Thu Mar 13 14:20:15 2025
 @author: Dr. Warren Jasper
-Refactored: SOS filtering applied inside a standalone function.
 """
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
