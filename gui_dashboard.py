@@ -29,6 +29,7 @@ from scipy.optimize import curve_fit
 
 
 
+
 def format_folder_name(folder_name):
     try:
         parts = folder_name.split("_")
@@ -44,6 +45,81 @@ def format_folder_name(folder_name):
         return folder_name
 
 class WickingDashboard(QMainWindow):
+    def generate_summary(self):
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_pdf import PdfPages
+        from matplotlib.gridspec import GridSpec
+
+        selected_items = self.exp_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "No Experiment Selected", "Please select an experiment.")
+            return
+
+        display_name = selected_items[0].text()
+        folder_name = self.folder_display_map[display_name]
+        folder = os.path.join(self.output_dir, folder_name)
+        csv_path = os.path.join(folder, "data.csv")
+        pdf_path = os.path.join(folder, "summary_report.pdf")
+
+        if not os.path.exists(csv_path):
+            QMessageBox.warning(self, "Missing Data", "No data.csv found.")
+            return
+
+        try:
+            df = pd.read_csv(csv_path)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to process data:\n{e}")
+            return
+
+        summary_text = self.meta_view.toPlainText().strip()
+        if not summary_text:
+            summary_text = "No summary available."
+
+        with PdfPages(pdf_path) as pdf:
+            fig = plt.figure(figsize=(11.7, 8.3))  # A4 landscape
+
+            gs = GridSpec(2, 2, height_ratios=[5, 2], figure=fig)
+
+            # Clean experiment name
+            exp_name = re.sub(r"_\d{8}_\d{6}$", "", folder_name)
+
+            # Safer margin + smaller font
+            fig.suptitle(f"Experiment: {exp_name}", fontsize=14, fontweight='bold', y=0.96)
+
+            # Plot 1: Height
+            ax1 = fig.add_subplot(gs[0, 0])
+            ax1.plot(df["Time_Uniform"], df["Height_Model"], label="Modeled", linewidth=2)
+            ax1.set_xlabel("Time (s)")
+            ax1.set_ylabel("Height (mm)")
+            ax1.set_title("Height (Modeled)")
+            ax1.legend()
+            ax1.grid(True)
+            ymin, ymax = ax1.get_ylim()
+            ax1.set_yticks(np.arange(0, ymax + 10, 10))
+
+            # Plot 2: Wicking Rate
+            ax2 = fig.add_subplot(gs[0, 1])
+            ax2.plot(df["Time_Uniform"], df["Wicking_Rate"], label="Wicking Rate", color="red")
+            ax2.set_xlabel("Time (s)")
+            ax2.set_ylabel("Wicking Rate (mm/s)")
+            ax2.set_title("Wicking Rate")
+            ax2.legend()
+            ax2.grid(True)
+            ymin, ymax = ax2.get_ylim()
+            ax2.set_yticks(np.arange(0, ymax + 0.5, 0.5))
+
+            # Summary
+            ax3 = fig.add_subplot(gs[1, :])
+            ax3.axis("off")
+            ax3.text(0.01, 0.98, "Summary", fontsize=13, fontweight="bold", va="top")
+            ax3.text(0.01, 0.84, summary_text, fontsize=10, va="top", family="monospace", linespacing=1.5)
+
+            pdf.savefig(fig, bbox_inches='tight')
+            plt.close()
+
+        QMessageBox.information(self, "PDF Saved", f"Summary saved to:\n{pdf_path}")
+
+
 
     def __init__(self, output_dir):
         super().__init__()
@@ -439,6 +515,25 @@ class WickingDashboard(QMainWindow):
         right_panel.addWidget(self.type_filter_label)
         right_panel.addWidget(self.type_filter_dropdown)
         right_panel.addWidget(self.meta_view)
+
+        #Button to save summary 
+        self.save_pdf_button = QPushButton("Generate Summary")
+        self.save_pdf_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 8px;
+                margin-top: 6px;
+            }
+            QPushButton:hover {
+                background-color: #d35400;
+            }
+        """)
+        self.save_pdf_button.clicked.connect(self.generate_summary)
+        right_panel.addWidget(self.save_pdf_button)
+
         right_panel.addStretch()
 
         right_widget = QWidget()

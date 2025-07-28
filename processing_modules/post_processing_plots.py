@@ -8,6 +8,7 @@ Created on Thu Mar 13 14:20:15 2025
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from io import BytesIO
 from PIL import Image
 from scipy.optimize import curve_fit
@@ -25,7 +26,10 @@ def wicking_rate(t, H, tau, A):
 def model_f(t, H, tau, A):
     return H*(1 - np.exp(-t/tau)) + A*np.sqrt(t)
 
-def post_process_wicking_rate(df, show_plots=True):
+def post_process_wicking_rate(df,
+                            show_plots=True,
+                            height_yticks_spacing=10,
+                            wicking_yticks_spacing=0.5):
 
     # 1) Extract data
     t_data = df["Time"].values
@@ -53,30 +57,32 @@ def post_process_wicking_rate(df, show_plots=True):
     from PIL import Image
 
     buf_height = BytesIO()
-    plt.figure(figsize=(12, 6))
-    plt.plot(t_data, h_data, label="Raw Height", alpha=0.4)
-    plt.plot(t_model, h_model, label="Modeled", linewidth=2)
-    plt.xlabel("Time [s]")
-    plt.ylabel("Height (mm)")
-    plt.title("Height: Raw and Model")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(buf_height, format="png")
+    fig1, ax1 = plt.subplots(figsize=(12, 6))
+    ax1.plot(t_data, h_data, label="Raw Height", alpha=0.4)
+    ax1.plot(t_model, h_model, label="Modeled", linewidth=2)
+    ax1.set_xlabel("Time [s]")
+    ax1.set_ylabel("Height (mm)")
+    ax1.set_title("Height: Raw and Model")
+    ax1.legend()
+    ax1.grid(True)
+    ax1.yaxis.set_major_locator(ticker.MultipleLocator(height_yticks_spacing))
+    fig1.tight_layout()
+    fig1.savefig(buf_height, format="png")
     buf_height.seek(0)
     height_plot_image = Image.open(buf_height)
 
     # 6) Plot: Wicking Rate
     buf_wick = BytesIO()
-    plt.figure(figsize=(12, 6))
-    plt.plot(t_model, h_rate_model, label="wicking_rate", color="red", alpha=0.8)
-    plt.xlabel("Time (s)")
-    plt.ylabel("Wicking Rate (mm/s)")
-    plt.title("Wicking Rate")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(buf_wick, format="png")
+    fig2, ax2 = plt.subplots(figsize=(12, 6))
+    ax2.plot(t_model, h_rate_model, label="Wicking Rate", color="red", alpha=0.8)
+    ax2.set_xlabel("Time (s)")
+    ax2.set_ylabel("Wicking Rate (mm/s)")
+    ax2.set_title("Wicking Rate")
+    ax2.legend()
+    ax2.grid(True)
+    ax2.yaxis.set_major_locator(ticker.MultipleLocator(wicking_yticks_spacing))
+    fig2.tight_layout()
+    fig2.savefig(buf_wick, format="png")
     buf_wick.seek(0)
     wicking_plot_image = Image.open(buf_wick)
 
