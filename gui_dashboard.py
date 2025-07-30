@@ -16,16 +16,21 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QListWidget, QTextEdit,
     QVBoxLayout, QHBoxLayout, QWidget, QStackedWidget, QMessageBox, QFrame,
     QLineEdit, QInputDialog, QSplitter, QRadioButton, QButtonGroup, QCheckBox,
-    QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit, QGridLayout
+    QLabel, QComboBox, QListWidget, QListWidgetItem, QDateEdit, QGridLayout, QDialog, QFileDialog
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.gridspec import GridSpec
 import subprocess
 import threading
 from datetime import datetime
 import pytz
 from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
 
 
 
@@ -43,13 +48,72 @@ def format_folder_name(folder_name):
         return f"{name_part} – {readable} (ET)"
     except Exception:
         return folder_name
+class GroupingDialog(QDialog):
+    def __init__(self, selected_items, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create Groups for Selected Experiments")
+        self.selected_items = selected_items
+        self.group_names = []  # Start empty
+        self.combos = {}
+
+        self.layout = QVBoxLayout(self)
+
+        # Group creation section
+        input_layout = QHBoxLayout()
+        self.new_group_input = QLineEdit()
+        self.new_group_input.setPlaceholderText("Enter new group name...")
+        add_btn = QPushButton("Add Group")
+        add_btn.clicked.connect(self.add_group)
+        input_layout.addWidget(self.new_group_input)
+        input_layout.addWidget(add_btn)
+        self.layout.addLayout(input_layout)
+
+        # Experiment-to-group mapping rows
+        for exp_name in self.selected_items:
+            row = QHBoxLayout()
+            label = QLabel(exp_name)
+            combo = QComboBox()
+            combo.setEnabled(False)  # initially disabled until at least one group exists
+            row.addWidget(label)
+            row.addWidget(combo)
+            self.layout.addLayout(row)
+            self.combos[exp_name] = combo
+
+        # OK/Cancel buttons
+        button_layout = QHBoxLayout()
+        ok_btn = QPushButton("OK")
+        ok_btn.clicked.connect(self.accept)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(ok_btn)
+        button_layout.addWidget(cancel_btn)
+        self.layout.addLayout(button_layout)
+
+    def add_group(self):
+        new_group = self.new_group_input.text().strip()
+        if not new_group:
+            QMessageBox.warning(self, "Invalid Name", "Please enter a valid group name.")
+            return
+        if new_group in self.group_names:
+            QMessageBox.warning(self, "Duplicate Name", "This group already exists.")
+            return
+        self.group_names.append(new_group)
+        # Add the new group to all combo boxes
+        for combo in self.combos.values():
+            combo.setEnabled(True)
+            combo.addItem(new_group)
+        self.new_group_input.clear()
+
+    def get_group_assignments(self):
+        result = {}
+        for label, combo in self.combos.items():
+            group = combo.currentText()
+            if group:
+                result.setdefault(group, []).append(label)
+        return result        
 
 class WickingDashboard(QMainWindow):
-    def generate_summary(self):
-        import matplotlib.pyplot as plt
-        from matplotlib.backends.backend_pdf import PdfPages
-        from matplotlib.gridspec import GridSpec
-
+    def generate_single_summary(self):
         selected_items = self.exp_list.selectedItems()
         if not selected_items:
             QMessageBox.warning(self, "No Experiment Selected", "Please select an experiment.")
@@ -77,7 +141,6 @@ class WickingDashboard(QMainWindow):
 
         with PdfPages(pdf_path) as pdf:
             fig = plt.figure(figsize=(11.7, 8.3))  # A4 landscape
-
             gs = GridSpec(2, 2, height_ratios=[5, 2], figure=fig)
 
             # Clean experiment name
@@ -97,16 +160,20 @@ class WickingDashboard(QMainWindow):
             ymin, ymax = ax1.get_ylim()
             ax1.set_yticks(np.arange(0, ymax + 10, 10))
 
-            # Plot 2: Wicking Rate
+            # Plot 2: Average Wicking Rate
+            # Start from 350th row for Time and Avg Wicking Rate
+            # df_wicking = df.iloc[350:]
+            df_wicking = df[df["Time"] > 60]
             ax2 = fig.add_subplot(gs[0, 1])
-            ax2.plot(df["Time_Uniform"], df["Wicking_Rate"], label="Wicking Rate", color="red")
+            ax2.plot(df_wicking["Time"], df_wicking["Avg Wicking Rate"], label="Wicking Rate", color="red")
+            # ax2.plot(df["Time"], df["Avg Wicking Rate"], label="Wicking Rate", color="red")
             ax2.set_xlabel("Time (s)")
             ax2.set_ylabel("Wicking Rate (mm/s)")
-            ax2.set_title("Instantaneous Wicking Rate")
+            ax2.set_title("Average Wicking Rate")
             ax2.legend()
             ax2.grid(True)
             ymin, ymax = ax2.get_ylim()
-            ax2.set_yticks(np.arange(0, ymax + 0.5, 0.5))
+            ax2.set_yticks(np.arange(0, ymax + 0.05, 0.05))
 
             # Summary
             ax3 = fig.add_subplot(gs[1, :])
@@ -118,6 +185,138 @@ class WickingDashboard(QMainWindow):
             plt.close()
 
         QMessageBox.information(self, "PDF Saved", f"Summary saved to:\n{pdf_path}")
+
+    def handle_generate_summary(self):
+        selected_items = self.exp_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "No Selection", "Please select at least one experiment.")
+            return
+
+        if len(selected_items) == 1:
+            self.generate_single_summary()
+            return
+
+        display_names = [item.text() for item in selected_items]
+        dialog = GroupingDialog(display_names, self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        group_map = dialog.get_group_assignments()
+        if not group_map:
+            QMessageBox.warning(self, "No Groups", "Please create and assign at least one group.")
+            return
+
+        save_path, _ = QFileDialog.getSaveFileName(self, "Save Summary PDF", "grouped_summary.pdf", "PDF Files (*.pdf)")
+        if not save_path:
+            return
+
+        with PdfPages(save_path) as pdf:
+            fig = plt.figure(figsize=(8.3, 11.7))  # A4 portrait
+            gs = GridSpec(5, 1, height_ratios=[3, 3, 0.2, 0, 2], figure=fig)
+
+            # === Plot 1: Fitted Height ===
+            ax1 = fig.add_subplot(gs[0])
+            for disp_name in display_names:
+                folder = self.folder_display_map[disp_name]
+                csv_path = os.path.join(self.output_dir, folder, "data.csv")
+                if not os.path.exists(csv_path):
+                    continue
+                try:
+                    df = pd.read_csv(csv_path)
+                    x = df["Time_Uniform"] if "Time_Uniform" in df.columns else df["Time"]
+                    y = df["Height_Model"] if "Height_Model" in df.columns else df["Height"]
+                    ax1.plot(x, y, label=f"{disp_name} (fit)", linewidth=1.5, alpha=0.9)
+                except Exception as e:
+                    print(f"Plot error in {disp_name}: {e}")
+            ax1.set_title("Fitted Height vs Time")
+            ax1.set_xlabel("Time (s)")
+            ax1.set_ylabel("Height (mm)")
+            ax1.grid(True)
+            ax1.legend(fontsize=7)
+            ymin, ymax = ax1.get_ylim()
+            ax1.set_yticks(np.arange(0, ymax + 10, 10))
+
+            # === Plot 2: Wicking Rate ===
+            ax2 = fig.add_subplot(gs[1])
+            for disp_name in display_names:
+                folder = self.folder_display_map[disp_name]
+                csv_path = os.path.join(self.output_dir, folder, "data.csv")
+                if not os.path.exists(csv_path):
+                    continue
+                try:
+                    df = pd.read_csv(csv_path)
+                    df = df[df["Time"] > 60]  # exclude startup noise
+                    if "Avg Wicking Rate" in df.columns:
+                        ax2.plot(df["Time"], df["Avg Wicking Rate"], label=f"{disp_name}", linewidth=1.3, alpha=0.8)
+                except Exception as e:
+                    print(f"Wicking plot error in {disp_name}: {e}")
+            ax2.set_title("Average Wicking Rate vs Time")
+            ax2.set_xlabel("Time (s)")
+            ax2.set_ylabel("Wicking Rate (mm/s)")
+            ax2.grid(True)
+            ax2.legend(fontsize=7)
+            ymin, ymax = ax2.get_ylim()
+            ax2.set_yticks(np.arange(0, ymax + 0.05, 0.05))
+
+            # === Summary Text Table ===
+            ax3 = fig.add_subplot(gs[4])
+            ax3.axis("off")
+
+            minute_values = list(range(1, 11))
+            group_names = list(group_map.keys())
+            height_table = {g: [] for g in group_names}
+            rate_table = {g: [] for g in group_names}
+
+            for group_name, items in group_map.items():
+                height_rows, rate_rows = [], []
+                for disp_name in items:
+                    folder = self.folder_display_map[disp_name]
+                    csv_path = os.path.join(self.output_dir, folder, "data.csv")
+                    if not os.path.exists(csv_path):
+                        continue
+                    try:
+                        df = pd.read_csv(csv_path)
+                        h_row, r_row = [], []
+                        for t in [60 * i for i in minute_values]:
+                            closest_idx = (df["Time"] - t).abs().idxmin()
+                            h = df.loc[closest_idx, "Height"]
+                            r = df.loc[closest_idx, "Avg Wicking Rate"] if "Avg Wicking Rate" in df.columns else h / t
+                            h_row.append(h)
+                            r_row.append(r)
+                        height_rows.append(h_row)
+                        rate_rows.append(r_row)
+                    except:
+                        continue
+                if height_rows:
+                    height_table[group_name] = np.mean(height_rows, axis=0)
+                    rate_table[group_name] = np.mean(rate_rows, axis=0)
+
+            # Layout: Left = Height | Right = Rate
+            x_left = 0.05
+            x_right = 0.55
+            y_start = 0.92
+            line_spacing = 0.045
+
+            # Headers
+            height_header = "Time (min)      " + "".join([f"{g:>12}" for g in group_names])
+            rate_header = "Time (min)      " + "".join([f"{g:>12}" for g in group_names])
+            ax3.text(x_left, y_start, "Group Summary – Avg Height (mm)", fontsize=10, fontweight="bold", family="monospace", va="top")
+            ax3.text(x_right, y_start, "Group Summary – Avg Wicking Rate (mm/s)", fontsize=10, fontweight="bold", family="monospace", va="top")
+            ax3.text(x_left, y_start - line_spacing, height_header, fontsize=9, family="monospace", va="top")
+            ax3.text(x_right, y_start - line_spacing, rate_header, fontsize=9, family="monospace", va="top")
+
+            for i, min_val in enumerate(minute_values):
+                h_row = f"{min_val:<15}" + "".join([f"{height_table[g][i]:>12.2f}" for g in group_names])
+                r_row = f"{min_val:<15}" + "".join([f"{rate_table[g][i]:>12.4f}" for g in group_names])
+
+                y = y_start - (i + 2) * line_spacing
+                ax3.text(x_left, y, h_row, fontsize=8.5, family="monospace", va="top")
+                ax3.text(x_right, y, r_row, fontsize=8.5, family="monospace", va="top")
+
+            pdf.savefig(fig, bbox_inches='tight')
+            plt.close()
+
+        QMessageBox.information(self, "Saved", f"Summary saved to:\n{save_path}")
 
 
 
@@ -531,7 +730,7 @@ class WickingDashboard(QMainWindow):
                 background-color: #d35400;
             }
         """)
-        self.save_pdf_button.clicked.connect(self.generate_summary)
+        self.save_pdf_button.clicked.connect(self.handle_generate_summary)
         right_panel.addWidget(self.save_pdf_button)
 
         right_panel.addStretch()
