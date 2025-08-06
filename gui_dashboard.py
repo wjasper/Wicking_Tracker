@@ -34,7 +34,7 @@ import pytz
 from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
 import warnings
-
+import matplotlib.cm as cm
 
 
 
@@ -200,6 +200,8 @@ class WickingDashboard(QMainWindow):
             return
 
         display_names = [item.text() for item in selected_items]
+        folder_name = self.folder_display_map[display_names[0]]
+        folder = os.path.join(self.output_dir, folder_name)
         dialog = GroupingDialog(display_names, self)
         if dialog.exec_() != QDialog.Accepted:
             return
@@ -213,51 +215,82 @@ class WickingDashboard(QMainWindow):
         if not save_path:
             return
 
+
+
         with PdfPages(save_path) as pdf:
             fig = plt.figure(figsize=(8.3, 11.7))  # A4 portrait
-            gs = GridSpec(5, 1, height_ratios=[3, 3, 0.2, 0, 2], figure=fig)
+            gs = GridSpec(5, 1, height_ratios=[3, 0.4, 3, 0, 2], figure=fig)
+
+            # Clean experiment name
+            exp_name = re.sub(r"_\d{8}_\d{6}$", "", folder_name)
+
+            # Safer margin + smaller font
+            fig.suptitle(f"Experiment: {exp_name}", fontsize=14, fontweight='bold', y=0.96)
+
+            # Get group names from the group_map
+            group_names = list(group_map.keys())
+            
+            # Assign a unique color to each group
+            cmap = plt.get_cmap("tab20")   # supports up to 20 distinct colors
+            group_colors = {group: cmap(i % 20) for i, group in enumerate(group_names)}
 
             # === Plot 1: Fitted Height ===
             ax1 = fig.add_subplot(gs[0])
-            for disp_name in display_names:
-                folder = self.folder_display_map[disp_name]
-                csv_path = os.path.join(self.output_dir, folder, "data.csv")
-                if not os.path.exists(csv_path):
-                    continue
-                try:
-                    df = pd.read_csv(csv_path)
-                    x = df["Time_Uniform"] if "Time_Uniform" in df.columns else df["Time"]
-                    y = df["Height_Model"] if "Height_Model" in df.columns else df["Height"]
-                    ax1.plot(x, y, label=f"{disp_name} (fit)", linewidth=1.5, alpha=0.9)
-                except Exception as e:
-                    print(f"Plot error in {disp_name}: {e}")
+            for group_name, items in group_map.items():
+                color = group_colors[group_name]
+                for disp_name in items:
+                    folder = self.folder_display_map[disp_name]
+                    csv_path = os.path.join(self.output_dir, folder, "data.csv")
+                    if not os.path.exists(csv_path):
+                        continue
+                    try:
+                        df = pd.read_csv(csv_path)
+                        x = df["Time_Uniform"] if "Time_Uniform" in df.columns else df["Time"]
+                        y = df["Height_Model"] if "Height_Model" in df.columns else df["Height"]
+                        ax1.plot(x, y, color=color, linewidth=1.5, alpha=0.9)
+                    except Exception as e:
+                        print(f"Plot error in {disp_name}: {e}")
+            
             ax1.set_title("Fitted Height vs Time")
             ax1.set_xlabel("Time (s)")
             ax1.set_ylabel("Height (mm)")
             ax1.grid(True)
+            
+            # Add legend with group names and colors
+            for group_name, color in group_colors.items():
+                ax1.plot([], [], label=group_name, color=color)
             ax1.legend(fontsize=7)
+            
             ymin, ymax = ax1.get_ylim()
             ax1.set_yticks(np.arange(0, ymax + 10, 10))
 
             # === Plot 2: Wicking Rate ===
-            ax2 = fig.add_subplot(gs[1])
-            for disp_name in display_names:
-                folder = self.folder_display_map[disp_name]
-                csv_path = os.path.join(self.output_dir, folder, "data.csv")
-                if not os.path.exists(csv_path):
-                    continue
-                try:
-                    df = pd.read_csv(csv_path)
-                    df = df[df["Time_Uniform"] > 60]  # exclude startup noise
-                    if "Modeled Avg Wicking Rate" in df.columns:
-                        ax2.plot(df["Time_Uniform"], df["Modeled Avg Wicking Rate"], label=f"{disp_name}", linewidth=1.3, alpha=0.8)
-                except Exception as e:
-                    print(f"Wicking plot error in {disp_name}: {e}")
+            ax2 = fig.add_subplot(gs[2])
+            for group_name, items in group_map.items():
+                color = group_colors[group_name]
+                for disp_name in items:
+                    folder = self.folder_display_map[disp_name]
+                    csv_path = os.path.join(self.output_dir, folder, "data.csv")
+                    if not os.path.exists(csv_path):
+                        continue
+                    try:
+                        df = pd.read_csv(csv_path)
+                        df = df[df["Time_Uniform"] > 60]  # exclude startup noise
+                        if "Modeled Avg Wicking Rate" in df.columns:
+                            ax2.plot(df["Time_Uniform"], df["Modeled Avg Wicking Rate"], color=color, linewidth=1.3, alpha=0.8)
+                    except Exception as e:
+                        print(f"Wicking plot error in {disp_name}: {e}")
+            
             ax2.set_title("Average Wicking Rate vs Time")
             ax2.set_xlabel("Time (s)")
             ax2.set_ylabel("Wicking Rate (mm/s)")
             ax2.grid(True)
+            
+            # Add legend with group names and colors
+            for group_name, color in group_colors.items():
+                ax2.plot([], [], label=group_name, color=color)
             ax2.legend(fontsize=7)
+            
             ymin, ymax = ax2.get_ylim()
             ax2.set_yticks(np.arange(0, ymax + 0.05, 0.05))
 
@@ -266,7 +299,6 @@ class WickingDashboard(QMainWindow):
             ax3.axis("off")
 
             minute_values = list(range(1, 11))
-            group_names = list(group_map.keys())
             height_table = {g: [] for g in group_names}
             rate_table = {g: [] for g in group_names}
 
@@ -281,9 +313,10 @@ class WickingDashboard(QMainWindow):
                         df = pd.read_csv(csv_path)
                         h_row, r_row = [], []
                         for t in [60 * i for i in minute_values]:
-                            closest_idx = (df["Time"] - t).abs().idxmin()
-                            h = df.loc[closest_idx, "Height"]
-                            r = df.loc[closest_idx, "Avg Wicking Rate"] if "Avg Wicking Rate" in df.columns else h / t
+                            closest_idx = (df["Time_Uniform"] - t).abs().idxmin()
+                            h = df.loc[closest_idx, "Height_Model"]
+                            r = df.loc[closest_idx, "Modeled Avg Wicking Rate"] if "Modeled Avg Wicking Rate" in df.columns else h / t
+
                             h_row.append(h)
                             r_row.append(r)
                         height_rows.append(h_row)
@@ -294,27 +327,51 @@ class WickingDashboard(QMainWindow):
                     height_table[group_name] = np.mean(height_rows, axis=0)
                     rate_table[group_name] = np.mean(rate_rows, axis=0)
 
-            # Layout: Left = Height | Right = Rate
-            x_left = 0.05
-            x_right = 0.55
-            y_start = 0.92
-            line_spacing = 0.045
+            # Layout positioning with proper spacing
+            x_left = -0.05
+            x_right = 0.45
+            y_start = 0.98
+            title_spacing = 0.08
+            header_spacing = 0.06
+            line_spacing = 0.07
 
-            # Headers
-            height_header = "Time (min)      " + "".join([f"{g:>12}" for g in group_names])
-            rate_header = "Time (min)      " + "".join([f"{g:>12}" for g in group_names])
-            ax3.text(x_left, y_start, "Group Summary – Avg Height (mm)", fontsize=10, fontweight="bold", family="monospace", va="top")
-            ax3.text(x_right, y_start, "Group Summary – Avg Wicking Rate (mm/s)", fontsize=10, fontweight="bold", family="monospace", va="top")
-            ax3.text(x_left, y_start - line_spacing, height_header, fontsize=9, family="monospace", va="top")
-            ax3.text(x_right, y_start - line_spacing, rate_header, fontsize=9, family="monospace", va="top")
+            # Calculate column width based on number of groups
+            max_groups = max(len(group_names), 3)  # minimum 3 for formatting
+            col_width = min(12, max(8, 40 // max_groups))  # dynamic width between 8-12 chars
 
+            # Headers with proper formatting
+            height_title = "Group Summary – Avg Height (mm)"
+            rate_title = "Group Summary – Avg Wicking Rate (mm/s)"
+
+            ax3.text(x_left, y_start, height_title, fontsize=11, fontweight="bold", 
+                    family="monospace", va="top")
+            ax3.text(x_right, y_start, rate_title, fontsize=11, fontweight="bold", 
+                    family="monospace", va="top")
+
+            # Column headers
+            height_header = f"{'Time (min)':<12}" + "".join([f"{g[:col_width]:>{col_width}}" for g in group_names])
+            rate_header = f"{'Time (min)':<12}" + "".join([f"{g[:col_width]:>{col_width}}" for g in group_names])
+
+            ax3.text(x_left, y_start - title_spacing, height_header, fontsize=9, 
+                    family="monospace", va="top")
+            ax3.text(x_right, y_start - title_spacing, rate_header, fontsize=9, 
+                    family="monospace", va="top")
+
+            # Data rows with proper alignment
             for i, min_val in enumerate(minute_values):
-                h_row = f"{min_val:<15}" + "".join([f"{height_table[g][i]:>12.2f}" for g in group_names])
-                r_row = f"{min_val:<15}" + "".join([f"{rate_table[g][i]:>12.4f}" for g in group_names])
-
-                y = y_start - (i + 2) * line_spacing
-                ax3.text(x_left, y, h_row, fontsize=8.5, family="monospace", va="top")
-                ax3.text(x_right, y, r_row, fontsize=8.5, family="monospace", va="top")
+                if group_names:  # Only proceed if we have groups
+                    # Format height row
+                    h_values = "".join([f"{height_table[g][i]:>{col_width}.2f}" for g in group_names])
+                    h_row = f"{min_val:<12}" + h_values
+                    
+                    # Format rate row
+                    r_values = "".join([f"{rate_table[g][i]:>{col_width}.4f}" for g in group_names])
+                    r_row = f"{min_val:<12}" + r_values
+                    
+                    y_pos = y_start - title_spacing - header_spacing - (i * line_spacing)
+                    
+                    ax3.text(x_left, y_pos, h_row, fontsize=8.5, family="monospace", va="top")
+                    ax3.text(x_right, y_pos, r_row, fontsize=8.5, family="monospace", va="top")
 
             pdf.savefig(fig, bbox_inches='tight')
             plt.close()
