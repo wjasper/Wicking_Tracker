@@ -22,10 +22,10 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
-#temp fix---see later
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.gridspec import GridSpec
 import subprocess
 import threading
@@ -33,6 +33,7 @@ from datetime import datetime
 import pytz
 from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
+import warnings
 
 
 
@@ -165,9 +166,9 @@ class WickingDashboard(QMainWindow):
             # Plot 2: Average Wicking Rate
             # Start from 350th row for Time and Avg Wicking Rate
             # df_wicking = df.iloc[350:]
-            df_wicking = df[df["Time"] > 60]
+            df_wicking = df[df["Time_Uniform"] > 60]
             ax2 = fig.add_subplot(gs[0, 1])
-            ax2.plot(df_wicking["Time"], df_wicking["Avg Wicking Rate"], label="Wicking Rate", color="red")
+            ax2.plot(df_wicking["Time_Uniform"], df_wicking["Modeled Avg Wicking Rate"], label="Wicking Rate", color="red")
             # ax2.plot(df["Time"], df["Avg Wicking Rate"], label="Wicking Rate", color="red")
             ax2.set_xlabel("Time (s)")
             ax2.set_ylabel("Wicking Rate (mm/s)")
@@ -437,40 +438,36 @@ class WickingDashboard(QMainWindow):
         self.status_label.setText(f"{icon} {message}")
         self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
-    def extract_summary_from_output(self, full_text):
+    def extract_summary_from_df(self, df):
         summary_lines = []
-        minutes = [1,2,3,4,5,6,7,8,9,10]
+        minutes = list(range(1, 11))  # 1 to 10 minutes
+
+        if "Time_Uniform" not in df.columns or "Height_Model" not in df.columns:
+            return "Missing required columns: 'Time_Uniform' and/or 'Height_Model'"
 
         for min_val in minutes:
             target_time = min_val * 60
-            closest_time = None
-            closest_height = None
-            min_diff = float("inf")
+            try:
+                closest_idx = (df["Time_Uniform"] - target_time).abs().idxmin()
+                closest_time = df.loc[closest_idx, "Time_Uniform"]
+                closest_height = df.loc[closest_idx, "Height_Model"]
 
-            for line in full_text.splitlines():
-                if line.startswith("Time:") and "Height:" in line:
-                    try:
-                        time_val = float(line.split("Time:")[1].split("s")[0].strip())
-                        height_val = float(line.split("Height:")[1].split("mm")[0].strip())
-
-                        if time_val >= target_time and abs(time_val - target_time) < min_diff:
-                            min_diff = abs(time_val - target_time)
-                            closest_time = time_val
-                            closest_height = height_val
-                    except:
-                        continue
-
-            if closest_height is not None and closest_time and closest_time > 0:
-                avg_rate = closest_height / closest_time
-                summary_lines.append(
-                    f"{min_val} min height: {closest_height:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
-                )
-            else:
+                if closest_time > 0:
+                    avg_rate = closest_height / closest_time
+                    summary_lines.append(
+                        f"{min_val} min height: {closest_height:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
+                    )
+                else:
+                    summary_lines.append(
+                        f"{min_val} min height: Not Available | Avg Rate: Not Available"
+                    )
+            except:
                 summary_lines.append(
                     f"{min_val} min height: Not Available | Avg Rate: Not Available"
                 )
 
         return "\n".join(summary_lines)
+
 
     def toggle_sidebar(self):
         self.sidebar_frame.setVisible(not self.sidebar_frame.isVisible())
@@ -780,16 +777,43 @@ class WickingDashboard(QMainWindow):
         self.stack.setCurrentIndex(1)
         self.refresh_experiment_list()
 
+    def get_latest_experiment_folder(self):
+        folders = [f for f in os.listdir(self.output_dir) if os.path.isdir(os.path.join(self.output_dir, f))]
+        latest = max(folders, key=lambda x: os.path.getctime(os.path.join(self.output_dir, x)))
+        return latest
+
+    def generate_temp_dataframe(self, t_data, h_data):
+        def model_f(t, H, tau, A):
+            return H * (1 - np.exp(-t / tau)) + A * np.sqrt(t)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            try:
+                popt, _ = curve_fit(model_f, t_data, h_data, p0=[31, 9, 4], maxfev=5000)
+            except Exception as e:
+                print(f"Curve fit failed: {e}")
+                popt = [1, 1, 1]  # fallback values
+
+        t_uniform = np.linspace(0, max(t_data), len(t_data))
+        h_model = model_f(t_uniform, *popt)
+
+        df = pd.DataFrame({
+            "Time_Uniform": t_uniform,
+            "Height_Model": h_model,
+            "Modeled Avg Wicking Rate": h_model / np.maximum(t_uniform, 1)
+        })
+        return df
+
+
     def handle_start_wicking(self):
         def run_main_py():
             full_output_log = ""
-            # Immediately notify status before launching subprocess
             QMetaObject.invokeMethod(
                 self, "update_status", Qt.QueuedConnection,
                 Q_ARG(str, "Starting Wicking Tracker"),
                 Q_ARG(str, "blue")
             )
-            
+
             try:
                 proc = subprocess.Popen(
                     [sys.executable, "-u", "main.py"],
@@ -801,6 +825,7 @@ class WickingDashboard(QMainWindow):
                 for line in iter(proc.stdout.readline, ""):
                     line = line.strip()
                     full_output_log += line + "\n"
+
                     if line.startswith("STATUS:"):
                         message = line.split("STATUS:")[1].strip()
                         QMetaObject.invokeMethod(
@@ -810,14 +835,12 @@ class WickingDashboard(QMainWindow):
                         )
 
                     elif "Time:" in line and "Height:" in line:
-                        # parse live values
                         try:
                             time_val = line.split("Time:")[1].split("s")[0].strip()
                             delta_e = line.split("Delta E:")[1].split("|")[0].strip()
                             height = line.split("Height:")[1].split("mm")[0].strip()
                             threshold = line.split("Delta Threshold:")[1].split("|")[0].strip()
                             rate = line.split("Wicking Rate:")[1].split("mm")[0].strip()
-                            
 
                             QMetaObject.invokeMethod(self.stat_labels["Time"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{time_val} s"))
                             QMetaObject.invokeMethod(self.stat_labels["Delta E"], "setText", Qt.QueuedConnection, Q_ARG(str, delta_e))
@@ -825,18 +848,49 @@ class WickingDashboard(QMainWindow):
                             QMetaObject.invokeMethod(self.stat_labels["Delta Threshold"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{threshold}"))
                             QMetaObject.invokeMethod(self.stat_labels["Wicking Rate"], "setText", Qt.QueuedConnection, Q_ARG(str, f"{rate} mm/s"))
                         except Exception as e:
-                            print("Error parsing time line:", e)
+                            print("Error parsing live stats:", e)
 
                 proc.stdout.close()
                 proc.wait()
 
-                summary = self.extract_summary_from_output(full_output_log)
-                QMetaObject.invokeMethod(
-                    self.live_output_box,
-                    "append",
-                    Qt.QueuedConnection,
-                    Q_ARG(str, "\nSUMMARY\n" + summary)
-                )
+                try:
+                    # === Parse modeled data from log ===
+                    modeled_data = []
+                    for line in full_output_log.splitlines():
+                        if line.startswith("Time:") and "Height:" in line:
+                            try:
+                                time_val = float(line.split("Time:")[1].split("s")[0].strip())
+                                height_val = float(line.split("Height:")[1].split("mm")[0].strip())
+                                modeled_data.append((time_val, height_val))
+                            except:
+                                continue
+
+                    if not modeled_data:
+                        raise ValueError("No modeled data could be extracted.")
+
+                    modeled_data = np.array(modeled_data)
+                    time_vals = modeled_data[:, 0]
+                    height_vals = modeled_data[:, 1]
+
+                    # === Generate DataFrame using model ===
+                    df = self.generate_temp_dataframe(time_vals, height_vals)
+
+                    # === Generate and display summary ===
+                    summary = self.extract_summary_from_df(df)
+                    QMetaObject.invokeMethod(
+                        self.live_output_box,
+                        "append",
+                        Qt.QueuedConnection,
+                        Q_ARG(str, "\nSUMMARY\n" + summary)
+                    )
+
+                except Exception as e:
+                    QMetaObject.invokeMethod(
+                        self.live_output_box,
+                        "append",
+                        Qt.QueuedConnection,
+                        Q_ARG(str, f"\nSUMMARY ERROR:\n{e}")
+                    )
 
                 QMetaObject.invokeMethod(
                     self, "update_status", Qt.QueuedConnection,
@@ -853,7 +907,9 @@ class WickingDashboard(QMainWindow):
                 )
                 QTimer.singleShot(0, lambda: self.show_message(self, "Error", "main.py failed to run."))
 
+        # Start the experiment subprocess thread
         threading.Thread(target=run_main_py, daemon=True).start()
+
 
 
     def refresh_experiment_list(self):
@@ -911,26 +967,30 @@ class WickingDashboard(QMainWindow):
             try:
                 df = pd.read_csv(csv_path)
                 summary_lines = []
+
+                # Make sure necessary columns exist
+                if "Time_Uniform" not in df.columns or "Height_Model" not in df.columns:
+                    self.meta_view.setText("Missing required columns: 'Time_Uniform' or 'Height_Model'")
+                    return
+
                 for min_val in range(1, 11):
                     target_time = min_val * 60
 
-                    if df["Time"].max() < target_time:
+                    if df["Time_Uniform"].max() < target_time:
                         continue  # skip if time range is insufficient
 
-                    closest_idx = (df["Time"] - target_time).abs().idxmin()
-                    time_val = df.loc[closest_idx, "Time"]
+                    closest_idx = (df["Time_Uniform"] - target_time).abs().idxmin()
+                    time_val = df.loc[closest_idx, "Time_Uniform"]
+                    height_val = df.loc[closest_idx, "Height_Model"]
 
-                    if abs(time_val - target_time) > 10:
-                        continue  # skip if too far from target time
+                    # Calculate average wicking rate properly
+                    if time_val > 0:
+                        avg_rate = height_val / time_val
+                    else:
+                        avg_rate = 0
 
-                    height_val = df.loc[closest_idx, "Height"]
-                    rate_val = (
-                        df.loc[closest_idx, "Avg Wicking Rate"]
-                        if "Avg Wicking Rate" in df.columns
-                        else height_val / time_val
-                    )
                     summary_lines.append(
-                        f"{min_val} min height: {height_val:.2f} mm | Avg Rate: {rate_val:.4f} mm/s"
+                        f"{min_val} min height: {height_val:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
                     )
 
                 self.meta_view.setText("\n".join(summary_lines) if summary_lines else "No summary data available.")
@@ -939,6 +999,7 @@ class WickingDashboard(QMainWindow):
                 self.meta_view.setText(f"Failed to parse data.csv: {e}")
         else:
             self.meta_view.setText("No data.csv found.")
+
     
     #methods
 
@@ -1000,8 +1061,9 @@ class WickingDashboard(QMainWindow):
                 elif self.plot_mode == "wicking":
                     use_avg = self.avg_rate_radio.isChecked()
 
-                    if use_avg and "Avg Wicking Rate" in df.columns:
-                        self.ax.plot(df["Time"], df["Avg Wicking Rate"], label=f"{clean_label}")
+                    if use_avg and "Modeled Avg Wicking Rate" in df.columns:
+                        df_filtered = df[df["Time_Uniform"] > 60]
+                        self.ax.plot(df_filtered["Time_Uniform"], df_filtered["Modeled Avg Wicking Rate"], label=f"{clean_label}")
                     else:
                         h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
                         self.ax.plot(t_model, h_rate_model, label=f"{clean_label}")
@@ -1024,7 +1086,11 @@ class WickingDashboard(QMainWindow):
         # Custom Y-ticks
         y_min, y_max = self.ax.get_ylim()
         if self.plot_mode == "wicking":
-            self.ax.set_yticks(np.arange(0, y_max + 0.5, 0.5))  # every 0.5 mm/s
+            if use_avg and "Modeled Avg Wicking Rate" in df.columns:
+                self.ax.set_yticks(np.arange(0, y_max + 0.1, 0.1))  # every 0.1 mm/s
+            else:
+                self.ax.set_yticks(np.arange(0, y_max + 0.5, 0.5))  # every 0.5 mm/s
+
         elif self.plot_mode == "height":
             self.ax.set_yticks(np.arange(0, y_max + 10, 10))    # every 10 mm
 
