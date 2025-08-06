@@ -248,9 +248,9 @@ class WickingDashboard(QMainWindow):
                     continue
                 try:
                     df = pd.read_csv(csv_path)
-                    df = df[df["Time"] > 60]  # exclude startup noise
-                    if "Avg Wicking Rate" in df.columns:
-                        ax2.plot(df["Time"], df["Avg Wicking Rate"], label=f"{disp_name}", linewidth=1.3, alpha=0.8)
+                    df = df[df["Time_Uniform"] > 60]  # exclude startup noise
+                    if "Modeled Avg Wicking Rate" in df.columns:
+                        ax2.plot(df["Time_Uniform"], df["Modeled Avg Wicking Rate"], label=f"{disp_name}", linewidth=1.3, alpha=0.8)
                 except Exception as e:
                     print(f"Wicking plot error in {disp_name}: {e}")
             ax2.set_title("Average Wicking Rate vs Time")
