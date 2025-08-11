@@ -51,7 +51,8 @@ def post_process_wicking_rate(df,
     df["Time_Uniform"] = t_model
     df["Height_Model"] = h_model
     df["Wicking_Rate"] = h_rate_model
-
+    df["Modeled Avg Wicking Rate"] = df.apply(lambda row: row["Height_Model"] / row["Time_Uniform"] if row["Time_Uniform"] > 0 else 0,axis=1)
+    
     # 5) Plot: Heights
     from io import BytesIO
     from PIL import Image
