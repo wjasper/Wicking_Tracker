@@ -222,7 +222,8 @@ class WickingDashboard(QMainWindow):
             gs = GridSpec(5, 1, height_ratios=[3, 0.4, 3, 0, 2], figure=fig)
 
             # Clean experiment name
-            exp_name = re.sub(r"_\d{8}_\d{6}$", "", folder_name)
+            exp_name = re.sub(r"_\d{8}_\d{6}$", "", folder_name)  # remove timestamp
+            exp_name = re.sub(r"\s+\S+$", "", exp_name)      
 
             # Safer margin + smaller font
             fig.suptitle(f"Experiment: {exp_name}", fontsize=14, fontweight='bold', y=0.96)
