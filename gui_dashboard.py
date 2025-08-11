@@ -35,7 +35,8 @@ from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
 import warnings
 import matplotlib.cm as cm
-
+import random
+import matplotlib.colors as mcolors
 
 
 def format_folder_name(folder_name):
@@ -216,7 +217,6 @@ class WickingDashboard(QMainWindow):
             return
 
 
-
         with PdfPages(save_path) as pdf:
             fig = plt.figure(figsize=(8.3, 11.7))  # A4 portrait
             gs = GridSpec(5, 1, height_ratios=[3, 0.4, 3, 0, 2], figure=fig)
@@ -231,8 +231,28 @@ class WickingDashboard(QMainWindow):
             group_names = list(group_map.keys())
             
             # Assign a unique color to each group
-            cmap = plt.get_cmap("tab20")   # supports up to 20 distinct colors
-            group_colors = {group: cmap(i % 20) for i, group in enumerate(group_names)}
+            # cmap = plt.get_cmap("tab20")   # supports up to 20 distinct colors
+            # group_colors = {group: cmap(i % 20) for i, group in enumerate(group_names)}
+
+            # Assign yellow and blue to groups in order
+            custom_colors = ["#FFD700", "#1E90FF"]  # gold yellow, dodger blue
+            group_colors = {group: custom_colors[i % len(custom_colors)] for i, group in enumerate(group_names)}
+
+            # Fixed colors for first two groups
+            fixed_colors = ["#FFD700", "#1E90FF"]  # yellow, blue
+            group_colors = {}
+
+            # Assign fixed colors for first two groups
+            for i, group in enumerate(group_names):
+                if i < 2:
+                    group_colors[group] = fixed_colors[i]
+                else:
+                    # pick a random color excluding yellow and blue
+                    available_colors = list(mcolors.CSS4_COLORS.values())
+                    available_colors = [c for c in available_colors if c.lower() not in ["#ffd700", "#1e90ff", "gold", "blue"]]
+                    group_colors[group] = random.choice(available_colors)
+
+
 
             # === Plot 1: Fitted Height ===
             ax1 = fig.add_subplot(gs[0])
@@ -299,8 +319,8 @@ class WickingDashboard(QMainWindow):
             ax3.axis("off")
 
             minute_values = list(range(1, 11))
-            height_table = {g: [] for g in group_names}
-            rate_table = {g: [] for g in group_names}
+            height_table = {}   # only store groups with data
+            rate_table = {}
 
             for group_name, items in group_map.items():
                 height_rows, rate_rows = [], []
@@ -311,51 +331,81 @@ class WickingDashboard(QMainWindow):
                         continue
                     try:
                         df = pd.read_csv(csv_path)
-                        h_row, r_row = [], []
-                        for t in [60 * i for i in minute_values]:
-                            closest_idx = (df["Time_Uniform"] - t).abs().idxmin()
-                            h = df.loc[closest_idx, "Height_Model"]
-                            r = df.loc[closest_idx, "Modeled Avg Wicking Rate"] if "Modeled Avg Wicking Rate" in df.columns else h / t
+                        # Require needed columns
+                        if "Time_Uniform" not in df.columns or "Height_Model" not in df.columns:
+                            continue
 
+                        # Build one row per minute, but only if that minute exists in this file
+                        h_row, r_row = [], []
+                        for t in (60 * i for i in minute_values):
+                            if df["Time_Uniform"].max() < t:
+                                # not enough coverage; mark as NaN for this file at this minute
+                                h_row.append(np.nan)
+                                r_row.append(np.nan)
+                                continue
+                            closest_idx = (df["Time_Uniform"] - t).abs().idxmin()
+                            h = float(df.loc[closest_idx, "Height_Model"])
+                            if "Modeled Avg Wicking Rate" in df.columns:
+                                r = float(df.loc[closest_idx, "Modeled Avg Wicking Rate"])
+                            else:
+                                r = h / t if t > 0 else np.nan
                             h_row.append(h)
                             r_row.append(r)
+
                         height_rows.append(h_row)
                         rate_rows.append(r_row)
-                    except:
+                    except Exception:
                         continue
-                if height_rows:
-                    height_table[group_name] = np.mean(height_rows, axis=0)
-                    rate_table[group_name] = np.mean(rate_rows, axis=0)
 
-            # Layout positioning with proper spacing
-            x_left = -0.05
-            x_right = 0.45
-            y_start = 0.98
-            title_spacing = 0.08
-            header_spacing = 0.06
-            line_spacing = 0.07
+                # keep only groups with at least one non-NaN value across minutes
+                if height_rows and np.isfinite(np.nanmean(height_rows)).any():
+                    height_table[group_name] = np.nanmean(height_rows, axis=0)
+                    rate_table[group_name]   = np.nanmean(rate_rows, axis=0)
 
-            # Calculate column width based on number of groups
-            max_groups = max(len(group_names), 3)  # minimum 3 for formatting
-            col_width = min(12, max(8, 40 // max_groups))  # dynamic width between 8-12 chars
+            # ✅ Render only groups that actually have data
+            valid_groups = [g for g in group_names if g in height_table]
 
-            # Headers with proper formatting
-            height_title = "Group Summary – Avg Height (mm)"
-            rate_title = "Group Summary – Avg Wicking Rate (mm/s)"
+            if not valid_groups:
+                ax3.text(0.0, 0.5, "No valid data to summarize.", fontsize=10, va="center")
+            else:
+                # Layout positioning with proper spacing
+                x_left = -0.05
+                x_right = 0.45
+                y_start = 0.98
+                title_spacing = 0.08
+                header_spacing = 0.06
+                line_spacing = 0.07
 
-            ax3.text(x_left, y_start, height_title, fontsize=11, fontweight="bold", 
-                    family="monospace", va="top")
-            ax3.text(x_right, y_start, rate_title, fontsize=11, fontweight="bold", 
-                    family="monospace", va="top")
+                # Column width based on number of valid groups
+                max_groups = max(len(valid_groups), 3)  # minimum 3 for formatting
+                col_width = min(12, max(8, 40 // max_groups))
 
-            # Column headers
-            height_header = f"{'Time (min)':<12}" + "".join([f"{g[:col_width]:>{col_width}}" for g in group_names])
-            rate_header = f"{'Time (min)':<12}" + "".join([f"{g[:col_width]:>{col_width}}" for g in group_names])
+                # Titles
+                height_title = "Group Summary – Avg Height (mm)"
+                rate_title   = "Group Summary – Avg Wicking Rate (mm/s)"
+                ax3.text(x_left, y_start, height_title, fontsize=11, fontweight="bold",
+                        family="monospace", va="top")
+                ax3.text(x_right, y_start, rate_title, fontsize=11, fontweight="bold",
+                        family="monospace", va="top")
 
-            ax3.text(x_left, y_start - title_spacing, height_header, fontsize=9, 
-                    family="monospace", va="top")
-            ax3.text(x_right, y_start - title_spacing, rate_header, fontsize=9, 
-                    family="monospace", va="top")
+                # Headers
+                height_header = f"{'Time (min)':<12}" + "".join(f"{g[:col_width]:>{col_width}}" for g in valid_groups)
+                rate_header   = f"{'Time (min)':<12}" + "".join(f"{g[:col_width]:>{col_width}}" for g in valid_groups)
+                ax3.text(x_left,  y_start - title_spacing, height_header, fontsize=9, family="monospace", va="top")
+                ax3.text(x_right, y_start - title_spacing, rate_header,   fontsize=9, family="monospace", va="top")
+
+                # Rows (use blanks if a group has NaN for that minute)
+                for i, min_val in enumerate(minute_values):
+                    y_pos = y_start - title_spacing - header_spacing - (i * line_spacing)
+
+                    def fmt(val, width, prec):
+                        return f"{val:>{width}.{prec}f}" if np.isfinite(val) else f"{'':>{width}}"
+
+                    h_values = "".join(fmt(height_table[g][i], col_width, 2) for g in valid_groups)
+                    r_values = "".join(fmt(rate_table[g][i],   col_width, 4) for g in valid_groups)
+
+                    ax3.text(x_left,  y_pos, f"{min_val:<12}" + h_values, fontsize=8.5, family="monospace", va="top")
+                    ax3.text(x_right, y_pos, f"{min_val:<12}" + r_values, fontsize=8.5, family="monospace", va="top")
 
             # Data rows with proper alignment
             for i, min_val in enumerate(minute_values):
