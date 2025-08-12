@@ -358,8 +358,8 @@ class WickingDashboard(QMainWindow):
                     except Exception:
                         continue
 
-                # keep only groups with at least one non-NaN value across minutes
-                if height_rows and np.isfinite(np.nanmean(height_rows)).any():
+                # keep only groups with at least one valid entry
+                if height_rows:
                     height_table[group_name] = np.nanmean(height_rows, axis=0)
                     rate_table[group_name]   = np.nanmean(rate_rows, axis=0)
 
@@ -395,7 +395,7 @@ class WickingDashboard(QMainWindow):
                 ax3.text(x_left,  y_start - title_spacing, height_header, fontsize=9, family="monospace", va="top")
                 ax3.text(x_right, y_start - title_spacing, rate_header,   fontsize=9, family="monospace", va="top")
 
-                # Rows (use blanks if a group has NaN for that minute)
+                # Data rows - ONLY ONE SECTION HERE
                 for i, min_val in enumerate(minute_values):
                     y_pos = y_start - title_spacing - header_spacing - (i * line_spacing)
 
@@ -407,22 +407,6 @@ class WickingDashboard(QMainWindow):
 
                     ax3.text(x_left,  y_pos, f"{min_val:<12}" + h_values, fontsize=8.5, family="monospace", va="top")
                     ax3.text(x_right, y_pos, f"{min_val:<12}" + r_values, fontsize=8.5, family="monospace", va="top")
-
-            # Data rows with proper alignment
-            for i, min_val in enumerate(minute_values):
-                if group_names:  # Only proceed if we have groups
-                    # Format height row
-                    h_values = "".join([f"{height_table[g][i]:>{col_width}.2f}" for g in group_names])
-                    h_row = f"{min_val:<12}" + h_values
-                    
-                    # Format rate row
-                    r_values = "".join([f"{rate_table[g][i]:>{col_width}.4f}" for g in group_names])
-                    r_row = f"{min_val:<12}" + r_values
-                    
-                    y_pos = y_start - title_spacing - header_spacing - (i * line_spacing)
-                    
-                    ax3.text(x_left, y_pos, h_row, fontsize=8.5, family="monospace", va="top")
-                    ax3.text(x_right, y_pos, r_row, fontsize=8.5, family="monospace", va="top")
 
             pdf.savefig(fig, bbox_inches='tight')
             plt.close()
@@ -547,6 +531,7 @@ class WickingDashboard(QMainWindow):
         self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
     def extract_summary_from_df(self, df):
+        """Extract summary data for live display after experiment completion"""
         summary_lines = []
         minutes = list(range(1, 11))  # 1 to 10 minutes
 
@@ -555,21 +540,28 @@ class WickingDashboard(QMainWindow):
 
         for min_val in minutes:
             target_time = min_val * 60
+            
+            # Check if we have data for this time point
+            if df["Time_Uniform"].max() < target_time:
+                summary_lines.append(f"{min_val} min height: Not Available | Avg Rate: Not Available")
+                continue
+                
             try:
                 closest_idx = (df["Time_Uniform"] - target_time).abs().idxmin()
                 closest_time = df.loc[closest_idx, "Time_Uniform"]
                 closest_height = df.loc[closest_idx, "Height_Model"]
 
-                if closest_time > 0:
-                    avg_rate = closest_height / closest_time
-                    summary_lines.append(
-                        f"{min_val} min height: {closest_height:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
-                    )
+                # Use the modeled avg wicking rate if available, otherwise calculate
+                if "Modeled Avg Wicking Rate" in df.columns:
+                    avg_rate = df.loc[closest_idx, "Modeled Avg Wicking Rate"]
                 else:
-                    summary_lines.append(
-                        f"{min_val} min height: Not Available | Avg Rate: Not Available"
-                    )
-            except:
+                    avg_rate = closest_height / closest_time if closest_time > 0 else 0
+
+                summary_lines.append(
+                    f"{min_val} min height: {closest_height:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
+                )
+            except Exception as e:
+                print(f"Error extracting data for {min_val} min: {e}")
                 summary_lines.append(
                     f"{min_val} min height: Not Available | Avg Rate: Not Available"
                 )
@@ -987,9 +979,14 @@ class WickingDashboard(QMainWindow):
                     summary = self.extract_summary_from_df(df)
                     QMetaObject.invokeMethod(
                         self.live_output_box,
+                        "clear",  # Clear previous content first
+                        Qt.QueuedConnection
+                    )
+                    QMetaObject.invokeMethod(
+                        self.live_output_box,
                         "append",
                         Qt.QueuedConnection,
-                        Q_ARG(str, "\nSUMMARY\n" + summary)
+                        Q_ARG(str, "EXPERIMENT SUMMARY\n" + "="*50 + "\n" + summary)
                     )
 
                 except Exception as e:
@@ -1082,20 +1079,20 @@ class WickingDashboard(QMainWindow):
                     return
 
                 for min_val in range(1, 11):
-                    target_time = min_val * 60
+                    target_time = min_val * 60;
 
                     if df["Time_Uniform"].max() < target_time:
                         continue  # skip if time range is insufficient
 
                     closest_idx = (df["Time_Uniform"] - target_time).abs().idxmin()
                     time_val = df.loc[closest_idx, "Time_Uniform"]
-                    height_val = df.loc[closest_idx, "Height_Model"]
+                    height_val = df.loc[closest_idx, "Height_Model"];
 
                     # Calculate average wicking rate properly
                     if time_val > 0:
-                        avg_rate = height_val / time_val
+                        avg_rate = height_val / time_val;
                     else:
-                        avg_rate = 0
+                        avg_rate = 0;
 
                     summary_lines.append(
                         f"{min_val} min height: {height_val:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
