@@ -731,18 +731,21 @@ class WickingDashboard(QMainWindow):
         self.wicking_radio.toggled.connect(self.on_radio_change)
 
         # === Secondary radios for Height
+        self.height_raw_radio = QRadioButton("Raw Only")
         self.height_fitted_radio = QRadioButton("Fitted Only")
         self.height_raw_and_fitted_radio = QRadioButton("Raw + Fitted")
         self.height_fitted_radio.setChecked(True)
 
 
         self.height_mode_group = QButtonGroup()
+        self.height_mode_group.addButton(self.height_raw_radio)
         self.height_mode_group.addButton(self.height_fitted_radio)
         self.height_mode_group.addButton(self.height_raw_and_fitted_radio)
 
         self.height_mode_widget = QWidget()
         height_mode_layout = QHBoxLayout()
         height_mode_layout.setContentsMargins(0, 0, 0, 0)
+        height_mode_layout.addWidget(self.height_raw_radio)
         height_mode_layout.addWidget(self.height_fitted_radio)
         height_mode_layout.addWidget(self.height_raw_and_fitted_radio)
         self.height_mode_widget.setLayout(height_mode_layout)
@@ -752,6 +755,7 @@ class WickingDashboard(QMainWindow):
         self.avg_rate_radio = QRadioButton("Avg Wicking Rate")
         self.model_rate_radio.setChecked(True)
 
+        self.height_raw_radio.toggled.connect(self.plot_selected_experiments)
         self.height_fitted_radio.toggled.connect(self.plot_selected_experiments)
         self.height_raw_and_fitted_radio.toggled.connect(self.plot_selected_experiments)
         self.model_rate_radio.toggled.connect(self.plot_selected_experiments)
@@ -1093,9 +1097,9 @@ class WickingDashboard(QMainWindow):
 
                     # Calculate average wicking rate properly
                     if time_val > 0:
-                        avg_rate = height_val / time_val;
+                        avg_rate = height_val / time_val
                     else:
-                        avg_rate = 0;
+                        avg_rate = 0
 
                     summary_lines.append(
                         f"{min_val} min height: {height_val:.2f} mm | Avg Rate: {avg_rate:.4f} mm/s"
@@ -1159,18 +1163,24 @@ class WickingDashboard(QMainWindow):
                 t_model = np.linspace(0, max(t_data), len(t_data))
 
                 if self.plot_mode == "height":
+                    is_raw_only = self.height_raw_radio.isChecked()
                     is_fitted_only = self.height_fitted_radio.isChecked()
+                    is_both = self.height_raw_and_fitted_radio.isChecked()
+
                     h_model = model_f(t_model, H_opt, tau_opt, A_opt)
 
-                    if not is_fitted_only:
-                        self.ax.plot(t_data, h_data, label=f"{clean_label} (data)")
-                    self.ax.plot(t_model, h_model, label=f"{clean_label} (fit)")
+                    if is_raw_only or is_both:
+                        self.ax.plot(t_data, h_data, color='orange', label=f"{clean_label} (raw)", linewidth=1.5, alpha=0.8)
+                    
+                    # Plot model data if "Fitted Only" or "Raw + Fitted" is selected
+                    if is_fitted_only or is_both:
+                        self.ax.plot(t_model, h_model, color='#1f77b4', label=f"{clean_label} (model)", linewidth=1.5, alpha=0.9)
 
                 elif self.plot_mode == "wicking":
                     use_avg = self.avg_rate_radio.isChecked()
 
                     if use_avg and "Modeled Avg Wicking Rate" in df.columns:
-                        df_filtered = df[df["Time_Uniform"] > 60]
+                        df_filtered = df[df["Time_Uniform"] > 20]
                         self.ax.plot(df_filtered["Time_Uniform"], df_filtered["Modeled Avg Wicking Rate"], label=f"{clean_label}")
                     else:
                         h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
