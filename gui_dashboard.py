@@ -167,7 +167,7 @@ class WickingDashboard(QMainWindow):
             # Plot 2: Average Wicking Rate
             # Start from 350th row for Time and Avg Wicking Rate
             # df_wicking = df.iloc[350:]
-            df_wicking = df[df["Time_Uniform"] > 60]
+            df_wicking = df[df["Time_Uniform"] > 20]
             ax2 = fig.add_subplot(gs[0, 1])
             ax2.plot(df_wicking["Time_Uniform"], df_wicking["Modeled Avg Wicking Rate"], label="Wicking Rate", color="red")
             # ax2.plot(df["Time"], df["Avg Wicking Rate"], label="Wicking Rate", color="red")
@@ -177,7 +177,7 @@ class WickingDashboard(QMainWindow):
             ax2.legend()
             ax2.grid(True)
             ymin, ymax = ax2.get_ylim()
-            ax2.set_yticks(np.arange(0, ymax + 0.05, 0.05))
+            ax2.set_yticks(np.arange(0, ymax + 0.2, 0.2))
 
             # Summary
             ax3 = fig.add_subplot(gs[1, :])
@@ -299,7 +299,7 @@ class WickingDashboard(QMainWindow):
                         continue
                     try:
                         df = pd.read_csv(csv_path)
-                        df = df[df["Time_Uniform"] > 60]  # exclude startup noise
+                        df = df[df["Time_Uniform"] > 20]  # exclude startup noise
                         if "Modeled Avg Wicking Rate" in df.columns:
                             ax2.plot(df["Time_Uniform"], df["Modeled Avg Wicking Rate"], color=color, linewidth=1.3, alpha=0.8)
                     except Exception as e:
@@ -316,7 +316,7 @@ class WickingDashboard(QMainWindow):
             ax2.legend(fontsize=7)
             
             ymin, ymax = ax2.get_ylim()
-            ax2.set_yticks(np.arange(0, ymax + 0.05, 0.05))
+            ax2.set_yticks(np.arange(0, ymax + 0.2, 0.2))
 
             # === Summary Text Table ===
             ax3 = fig.add_subplot(gs[4])
@@ -1127,6 +1127,10 @@ class WickingDashboard(QMainWindow):
             np.seterr(divide='ignore', invalid='ignore')
             return H / tau * np.exp(-t / tau) + A / (2 * np.sqrt(t))
 
+        # Get matplotlib's default color cycle
+        prop_cycle = plt.rcParams['axes.prop_cycle']
+        colors = prop_cycle.by_key()['color']
+
         # Determine the selected plot mode
         if self.height_radio.isChecked():
             self.plot_mode = "height"
@@ -1142,7 +1146,7 @@ class WickingDashboard(QMainWindow):
             self.plot_area.draw()
             return
 
-        for item in selected_items:
+        for i, item in enumerate(selected_items):
             display_name = item.text()
             folder_name = self.folder_display_map[display_name]
             folder = os.path.join(self.output_dir, folder_name)
@@ -1150,6 +1154,11 @@ class WickingDashboard(QMainWindow):
             csv_path = os.path.join(folder, "data.csv")
             if not os.path.exists(csv_path):
                 continue
+
+            # Get the color for this experiment from matplotlib's default cycle
+
+            experiment_color_raw = colors[(i + 1) % len(colors)]
+            experiment_color_model = colors[i % len(colors)]
 
             try:
                 df = pd.read_csv(csv_path)
@@ -1159,7 +1168,6 @@ class WickingDashboard(QMainWindow):
                 # Fit model to height data
                 popt, _ = curve_fit(model_f, t_data, h_data, p0=[31, 9, 4], maxfev=5000)
                 H_opt, tau_opt, A_opt = popt
-                # t_model = np.linspace(min(t_data), max(t_data), 100)
                 t_model = np.linspace(0, max(t_data), len(t_data))
 
                 if self.plot_mode == "height":
@@ -1169,23 +1177,29 @@ class WickingDashboard(QMainWindow):
 
                     h_model = model_f(t_model, H_opt, tau_opt, A_opt)
 
+                    # Plot raw data if "Raw Only" or "Raw + Fitted" is selected
                     if is_raw_only or is_both:
-                        self.ax.plot(t_data, h_data, color='orange', label=f"{clean_label} (raw)", linewidth=1.5, alpha=0.8)
-                    
+                        self.ax.plot(t_data, h_data, color=experiment_color_raw,
+                                   label=f"{clean_label} (raw)", linewidth=1.5,
+                                   alpha=1.0)
+
                     # Plot model data if "Fitted Only" or "Raw + Fitted" is selected
                     if is_fitted_only or is_both:
-                        self.ax.plot(t_model, h_model, color='#1f77b4', label=f"{clean_label} (model)", linewidth=1.5, alpha=0.9)
+                        self.ax.plot(t_model, h_model, color=experiment_color_model,
+                                   label=f"{clean_label} (model)", linewidth=2,
+                                   alpha=1.0)
 
                 elif self.plot_mode == "wicking":
                     use_avg = self.avg_rate_radio.isChecked()
 
                     if use_avg and "Modeled Avg Wicking Rate" in df.columns:
                         df_filtered = df[df["Time_Uniform"] > 20]
-                        self.ax.plot(df_filtered["Time_Uniform"], df_filtered["Modeled Avg Wicking Rate"], label=f"{clean_label}")
+                        self.ax.plot(df_filtered["Time_Uniform"], df_filtered["Modeled Avg Wicking Rate"], 
+                                   color=experiment_color_model, label=f"{clean_label}", linewidth=1.5)
                     else:
                         h_rate_model = wicking_rate(t_model, H_opt, tau_opt, A_opt)
-                        self.ax.plot(t_model, h_rate_model, label=f"{clean_label}")
-
+                        self.ax.plot(t_model, h_rate_model, color=experiment_color_model, 
+                                   label=f"{clean_label}", linewidth=1.5)
 
             except Exception as e:
                 print(f"Error processing {clean_label}: {e}")
@@ -1200,15 +1214,14 @@ class WickingDashboard(QMainWindow):
 
         self.ax.set_xlabel("Time (s)")
 
-        # Add custom y-ticks only for wicking rate plot
         # Custom Y-ticks
         y_min, y_max = self.ax.get_ylim()
         if self.plot_mode == "wicking":
-            if use_avg and "Modeled Avg Wicking Rate" in df.columns:
-                self.ax.set_yticks(np.arange(0, y_max + 0.1, 0.1))  # every 0.1 mm/s
+            use_avg = self.avg_rate_radio.isChecked()
+            if use_avg and len(selected_items) > 0:
+                self.ax.set_yticks(np.arange(0, y_max + 0.2, 0.2))  # every 0.2 mm/s
             else:
                 self.ax.set_yticks(np.arange(0, y_max + 0.5, 0.5))  # every 0.5 mm/s
-
         elif self.plot_mode == "height":
             self.ax.set_yticks(np.arange(0, y_max + 10, 10))    # every 10 mm
 
